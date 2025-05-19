@@ -1,0 +1,200 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Cooperative {
+  id        Int       @id @default(autoincrement()) @map("id_cooperativa")
+  name      String    @map("nombre")
+  address   String    @map("direccion")
+  phone     String    @map("telefono")
+  email     String
+  logo      String
+  buses     Bus[]
+  routes    Route[]
+
+  @@map("cooperativas")
+}
+
+model Bus {
+  id               Int        @id @default(autoincrement()) @map("id_bus")
+  cooperativeId    Int        @map("id_cooperativa")
+  licensePlate     String     @map("placa")
+  chassisBrand     String     @map("marca_chasis")
+  bodyworkBrand    String     @map("marca_carroceria")
+  photo            String     @map("fotografia")
+  capacity         Int        @map("capacidad")
+  seatType         String     @map("tipo_asiento")
+  stoppageDays     Int        @map("dias_parada")
+  cooperative      Cooperative @relation(fields: [cooperativeId], references: [id])
+  seats            BusSeat[]
+  routeSheets      RouteSheet[]
+
+  @@map("buses")
+}
+
+model BusSeat {
+  id          Int       @id @default(autoincrement()) @map("id_asiento")
+  busId       Int       @map("id_bus")
+  number      String    @map("numero")
+  type        String    @map("tipo") // normal/VIP
+  location    String    @map("ubicacion") // pasillo/ventana
+  bus         Bus       @relation(fields: [busId], references: [id])
+  tickets     Ticket[]
+
+  @@map("asientos_bus")
+}
+
+model Route {
+  id              Int               @id @default(autoincrement()) @map("id_frecuencia")
+  cooperativeId   Int               @map("id_cooperativa")
+  originCity      String            @map("ciudad_origen")
+  destinationCity String            @map("ciudad_destino")
+  departureTime   DateTime          @map("hora_salida") @db.Time()
+  status          String            @map("estado")
+  antResolution   String            @map("resolucion_ANT")
+  cooperative     Cooperative       @relation(fields: [cooperativeId], references: [id])
+  intermediateStops IntermediateStop[]
+  routeSheets     RouteSheet[]
+
+  @@map("frecuencias")
+}
+
+model IntermediateStop {
+  id          Int     @id @default(autoincrement()) @map("id_parada")
+  routeId     Int     @map("id_frecuencia")
+  city        String  @map("ciudad")
+  order       Int     @map("orden")
+  route       Route   @relation(fields: [routeId], references: [id])
+
+  @@map("paradas_intermedias")
+}
+
+model RouteSheet {
+  id        Int      @id @default(autoincrement()) @map("id_hoja_ruta")
+  routeId   Int      @map("id_frecuencia")
+  busId     Int      @map("id_bus")
+  date      DateTime @map("fecha") @db.Date
+  status    String   @map("estado")
+  route     Route    @relation(fields: [routeId], references: [id])
+  bus       Bus      @relation(fields: [busId], references: [id])
+  tickets   Ticket[]
+
+  @@map("hojas_ruta")
+}
+
+model Role {
+  id          Int         @id @default(autoincrement()) @map("id_rol")
+  name        String      @map("nombre") // cliente/oficinista/chofer/admin_coop
+  description String      @map("descripcion")
+  userRoles   UserRole[]
+
+  @@map("roles")
+}
+
+model User {
+  id              Int               @id @default(autoincrement()) @map("id_usuario")
+  idNumber        String            @map("cedula")
+  documentType    String            @map("tipo_documento") // cedula/pasaporte
+  firstName       String            @map("nombres")
+  lastName        String            @map("apellidos")
+  email           String
+  phone           String            @map("telefono")
+  password        String
+  userRoles       UserRole[]
+  userHistory     UserHistory?
+  tickets         Ticket[]
+  notifications   Notification[]
+
+  @@map("usuarios")
+}
+
+model UserRole {
+  id        Int     @id @default(autoincrement()) @map("id_usuario_rol")
+  userId    Int     @map("id_usuario")
+  roleId    Int     @map("id_rol")
+  user      User    @relation(fields: [userId], references: [id])
+  role      Role    @relation(fields: [roleId], references: [id])
+
+  @@map("usuario_rol")
+}
+
+model UserHistory {
+  id            Int       @id @default(autoincrement()) @map("id_historial")
+  userId        Int       @unique @map("id_usuario")
+  totalPurchases Int       @map("total_compras")
+  lastPurchase  DateTime  @map("ultima_compra")
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@map("historial_usuario")
+}
+
+model Ticket {
+  id              Int         @id @default(autoincrement()) @map("id_boleto")
+  userId          Int         @map("id_usuario")
+  routeSheetId    Int         @map("id_hoja_ruta")
+  seatId          Int         @map("id_asiento")
+  purchaseDate    DateTime    @map("fecha_compra")
+  passengerType   String      @map("tipo_pasajero") // normal/menor/discapacitado/tercera_edad
+  price           Decimal     @map("precio") @db.Decimal(10, 2)
+  discount        Decimal     @map("descuento") @db.Decimal(10, 2)
+  status          String      @map("estado")
+  qrCode          String      @map("codigo_qr")
+  originStop      String      @map("parada_origen")
+  destinationStop String      @map("parada_destino")
+  user            User        @relation(fields: [userId], references: [id])
+  routeSheet      RouteSheet  @relation(fields: [routeSheetId], references: [id])
+  seat            BusSeat     @relation(fields: [seatId], references: [id])
+  payments        Payment[]
+  notifications   Notification[]
+
+  @@map("boletos")
+}
+
+model Payment {
+  id          Int       @id @default(autoincrement()) @map("id_pago")
+  ticketId    Int       @map("id_boleto")
+  method      String    @map("metodo") // transferencia/PayPal/tarjeta
+  amount      Decimal   @map("monto") @db.Decimal(10, 2)
+  status      String    @map("estado")
+  receipt     String    @map("comprobante")
+  date        DateTime  @map("fecha")
+  ticket      Ticket    @relation(fields: [ticketId], references: [id])
+
+  @@map("pagos")
+}
+
+model Notification {
+  id          Int       @id @default(autoincrement()) @map("id_notificacion")
+  userId      Int       @map("id_usuario")
+  ticketId    Int?      @map("id_boleto")
+  type        String    @map("tipo") // email/app/sms
+  message     String    @map("mensaje") @db.Text
+  read        Boolean   @map("leido")
+  sentDate    DateTime  @map("fecha_envio")
+  user        User      @relation(fields: [userId], references: [id])
+  ticket      Ticket?   @relation(fields: [ticketId], references: [id])
+
+  @@map("notificaciones")
+}
+
+model AppConfiguration {
+  id              Int       @id @default(autoincrement()) @map("id_configuracion")
+  appName         String    @map("nombre_app")
+  themeColors     Json      @map("colores_tema")
+  socialNetworks  Json      @map("redes_sociales")
+  supportEmail    String    @map("email_soporte")
+  supportPhone    String    @map("telefono_soporte")
+
+  @@map("configuracion_app")
+}
