@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -22,6 +16,8 @@ model Cooperative {
   logo      String
   buses     Bus[]
   routes    Route[]
+  users     User[]
+  isDeleted Boolean   @default(false)
 
   @@map("cooperativas")
 }
@@ -39,6 +35,7 @@ model Bus {
   cooperative      Cooperative @relation(fields: [cooperativeId], references: [id])
   seats            BusSeat[]
   routeSheets      RouteSheet[]
+  isDeleted        Boolean    @default(false)
 
   @@map("buses")
 }
@@ -51,6 +48,7 @@ model BusSeat {
   location    String    @map("ubicacion") // pasillo/ventana
   bus         Bus       @relation(fields: [busId], references: [id])
   tickets     Ticket[]
+  isDeleted   Boolean   @default(false)
 
   @@map("asientos_bus")
 }
@@ -66,6 +64,7 @@ model Route {
   cooperative     Cooperative       @relation(fields: [cooperativeId], references: [id])
   intermediateStops IntermediateStop[]
   routeSheets     RouteSheet[]
+  isDeleted       Boolean           @default(false)
 
   @@map("frecuencias")
 }
@@ -76,6 +75,7 @@ model IntermediateStop {
   city        String  @map("ciudad")
   order       Int     @map("orden")
   route       Route   @relation(fields: [routeId], references: [id])
+  isDeleted   Boolean @default(false)
 
   @@map("paradas_intermedias")
 }
@@ -89,6 +89,7 @@ model RouteSheet {
   route     Route    @relation(fields: [routeId], references: [id])
   bus       Bus      @relation(fields: [busId], references: [id])
   tickets   Ticket[]
+  isDeleted Boolean  @default(false)
 
   @@map("hojas_ruta")
 }
@@ -97,7 +98,7 @@ model Role {
   id          Int         @id @default(autoincrement()) @map("id_rol")
   name        String      @map("nombre") // cliente/oficinista/chofer/admin_coop
   description String      @map("descripcion")
-  userRoles   UserRole[]
+  users       User[]
 
   @@map("roles")
 }
@@ -111,22 +112,15 @@ model User {
   email           String
   phone           String            @map("telefono")
   password        String
-  userRoles       UserRole[]
+  roleId          Int               @map("id_rol")
+  cooperativeId   Int?              @map("id_cooperativa")
+  cooperative     Cooperative?      @relation(fields: [cooperativeId], references: [id])
+  role            Role              @relation(fields: [roleId], references: [id])
   userHistory     UserHistory?
   tickets         Ticket[]
-  notifications   Notification[]
+  isDeleted       Boolean           @default(false)
 
   @@map("usuarios")
-}
-
-model UserRole {
-  id        Int     @id @default(autoincrement()) @map("id_usuario_rol")
-  userId    Int     @map("id_usuario")
-  roleId    Int     @map("id_rol")
-  user      User    @relation(fields: [userId], references: [id])
-  role      Role    @relation(fields: [roleId], references: [id])
-
-  @@map("usuario_rol")
 }
 
 model UserHistory {
@@ -135,6 +129,7 @@ model UserHistory {
   totalPurchases Int       @map("total_compras")
   lastPurchase  DateTime  @map("ultima_compra")
   user          User      @relation(fields: [userId], references: [id])
+  isDeleted     Boolean   @default(false)
 
   @@map("historial_usuario")
 }
@@ -156,7 +151,7 @@ model Ticket {
   routeSheet      RouteSheet  @relation(fields: [routeSheetId], references: [id])
   seat            BusSeat     @relation(fields: [seatId], references: [id])
   payments        Payment[]
-  notifications   Notification[]
+  isDeleted       Boolean     @default(false)
 
   @@map("boletos")
 }
@@ -170,31 +165,7 @@ model Payment {
   receipt     String    @map("comprobante")
   date        DateTime  @map("fecha")
   ticket      Ticket    @relation(fields: [ticketId], references: [id])
+  isDeleted   Boolean   @default(false)
 
   @@map("pagos")
-}
-
-model Notification {
-  id          Int       @id @default(autoincrement()) @map("id_notificacion")
-  userId      Int       @map("id_usuario")
-  ticketId    Int?      @map("id_boleto")
-  type        String    @map("tipo") // email/app/sms
-  message     String    @map("mensaje") @db.Text
-  read        Boolean   @map("leido")
-  sentDate    DateTime  @map("fecha_envio")
-  user        User      @relation(fields: [userId], references: [id])
-  ticket      Ticket?   @relation(fields: [ticketId], references: [id])
-
-  @@map("notificaciones")
-}
-
-model AppConfiguration {
-  id              Int       @id @default(autoincrement()) @map("id_configuracion")
-  appName         String    @map("nombre_app")
-  themeColors     Json      @map("colores_tema")
-  socialNetworks  Json      @map("redes_sociales")
-  supportEmail    String    @map("email_soporte")
-  supportPhone    String    @map("telefono_soporte")
-
-  @@map("configuracion_app")
 }
