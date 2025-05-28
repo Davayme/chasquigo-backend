@@ -1,14 +1,18 @@
 // filepath: c:\Users\davay\Documents\Projects\Nestjs Projects\chasquigo-backend\src\users\users.controller.ts
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { UserAdminService } from './user_admin/user-admin.service';
 import { CreateUserDto } from './dtos/req/create-user.dto';
 import {
   ApiOperation,
   ApiTags,
-  ApiResponse
+  ApiResponse,
+  ApiBearerAuth
 } from '@nestjs/swagger';
 import { UserDriverService } from './user_admin/user-driver.service';
 import { UserClientService } from './user_admin/user-client.service';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorators/roles.decorator';
 
 @ApiTags('usuarios')
 @Controller('users')
@@ -19,6 +23,8 @@ export class UsersController {
   ) { }
 
   @Post('admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
   @ApiOperation({ summary: 'Crear usuario administrador' })
   @ApiResponse({ status: 201, description: 'Creado correctamente' })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
@@ -46,8 +52,10 @@ export class UsersController {
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard) 
+  @ApiBearerAuth('JWT')
   @ApiOperation({ summary: 'Obtener usuarios' })
-  @ApiResponse({ status: 200, description: 'Lista de administradores' })
+  @ApiResponse({ status: 200, description: 'Lista de todos los usuarios' })
   async getAllAdminUsers() {
     return this.userAdminService.getAllUsers();
   }
