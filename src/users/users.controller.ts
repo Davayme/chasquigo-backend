@@ -22,10 +22,10 @@ export class UsersController {
     return this.userAdminService.createAdminUser(createAdminUserDto);
   }
 
-  @Get('admin')
-  @ApiOperation({ summary: 'Obtener administradores' })
+  @Get()
+  @ApiOperation({ summary: 'Obtener usuarios' })
   @ApiResponse({ status: 200, description: 'Lista de administradores' })
   async getAllAdminUsers() {
-    return this.userAdminService.getAllAdminUsers();
+    return this.userAdminService.getAllUsers();
   }
 }
