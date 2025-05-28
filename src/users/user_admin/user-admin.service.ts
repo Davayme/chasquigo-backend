@@ -1,6 +1,6 @@
 import { Injectable, ConflictException, NotFoundException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateAdminUserDto } from '../dtos/req/create-user.dto';
+import { CreateUserDto } from '../dtos/req/create-user.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -9,7 +9,7 @@ export class UserAdminService {
   
   constructor(private prisma: PrismaService) {}
 
-  async createAdminUser(createAdminUserDto: CreateAdminUserDto) {
+  async createAdminUser(createAdminUserDto: CreateUserDto) {
     try {
       // Verificar si el email ya está en uso
       const existingUser = await this.prisma.user.findFirst({
@@ -73,7 +73,7 @@ export class UserAdminService {
 
       return newUser;
     } catch (error) {
-      // Los errores HTTP de NestJS (ConflictException, etc) se reenvían tal cual
+
       if (error instanceof ConflictException || error instanceof NotFoundException) {
         throw error;
       }

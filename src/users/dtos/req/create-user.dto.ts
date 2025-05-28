@@ -6,7 +6,7 @@ export enum DocumentType {
   PASAPORTE = 'pasaporte'
 }
 
-export class CreateAdminUserDto {
+export class CreateUserDto {
   @ApiProperty({ example: '1234567890' })
   @IsString()
   @IsNotEmpty()
