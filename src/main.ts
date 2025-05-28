@@ -1,3 +1,4 @@
+// filepath: c:\Users\davay\Documents\Projects\Nestjs Projects\chasquigo-backend\src\main.ts
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
@@ -5,7 +6,9 @@ import { HttpExceptionFilter } from './common/filters/http-error-filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { 
+    logger: ['error', 'warn', 'debug', 'log', 'verbose'], // Aumentar nivel de logs para debug
+  });
   
   // Habilitar CORS
   app.enableCors();
@@ -25,22 +28,33 @@ async function bootstrap() {
   // Registrar el filtro de excepciones global
   app.useGlobalFilters(new HttpExceptionFilter());
   
-  // Configuración de Swagger
+  // Configuración de Swagger con autenticación JWT
   const config = new DocumentBuilder()
     .setTitle('Chasquigo API')
     .setDescription('API para la aplicación de reserva de boletos de cooperativas de transporte')
     .setVersion('1.0')
-    .addBearerAuth()
+    .addBearerAuth({ 
+      type: 'http', 
+      scheme: 'bearer', 
+      bearerFormat: 'JWT',
+      name: 'JWT',
+      description: 'Ingresa tu token JWT',
+      in: 'header',
+    }, 'access-token')
     .build();
     
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
   
-  await app.listen(process.env.PORT ?? 3000);
+  console.log('Iniciando servidor NestJS...');
+  const port = process.env.PORT || 3000;
+  await app.listen(port);
   
   // Mostrar las rutas disponibles incluyendo Swagger
-  const serverUrl = `http://localhost:${process.env.PORT ?? 3000}`;
+  const serverUrl = `http://localhost:${port}`;
   console.log(`Servidor iniciado en ${serverUrl}`);
   console.log(`Documentación Swagger disponible en ${serverUrl}/api/docs`);
 }
-bootstrap();
+bootstrap().catch(err => {
+  console.error('Error al iniciar la aplicación:', err);
+});
