@@ -89,15 +89,12 @@ export class UserAdminService {
     }
   }
 
-  async getAllAdminUsers() {
+  async getAllUsers() {
     try {
-      // ID de rol de admin_coop predefinido
-      const adminRoleId = 1;
 
       // Obtener todos los usuarios con rol admin_coop
       return await this.prisma.user.findMany({
         where: {
-          roleId: adminRoleId,
           isDeleted: false
         },
         select: {
