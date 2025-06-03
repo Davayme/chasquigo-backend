@@ -2,6 +2,7 @@ import { Injectable, ConflictException, NotFoundException, InternalServerErrorEx
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from '../dtos/req/create-user.dto';
 import * as bcrypt from 'bcrypt';
+import { PrismaErrorHandler } from 'src/common/filters/prisma-errors';
 
 @Injectable()
 export class UserAdminService {
@@ -73,25 +74,18 @@ export class UserAdminService {
 
       return newUser;
     } catch (error) {
-
+      // Si ya es una excepción HTTP conocida, la reenvío sin modificar
       if (error instanceof ConflictException || error instanceof NotFoundException) {
         throw error;
       }
-
-      // Para errores de Prisma o inesperados, los transformamos en mensajes más amigables
-      this.logger.error(`Error al crear usuario administrador: ${error.message}`, error.stack);
-
-      if (error.code === 'P2002') {
-        throw new ConflictException('Ya existe un registro con estos datos');
-      }
-
-      throw new InternalServerErrorException('Error al crear el usuario administrador');
+      
+      // Usar el manejador centralizado para errores de Prisma
+      PrismaErrorHandler.handleError(error, 'createAdminUser');
     }
   }
 
   async getAllUsers() {
     try {
-
       // Obtener todos los usuarios con rol admin_coop
       return await this.prisma.user.findMany({
         where: {
@@ -119,11 +113,10 @@ export class UserAdminService {
         }
       });
     } catch (error) {
-      this.logger.error(`Error al obtener usuarios administradores: ${error.message}`, error.stack);
-      throw new InternalServerErrorException('Error al recuperar los usuarios administradores');
+      // Usar el manejador centralizado para errores de Prisma
+      PrismaErrorHandler.handleError(error, 'getAllUsers');
     }
   }
-
 
   async getCooperativeInfoByUserId(userId: number) {
     try {
@@ -154,12 +147,11 @@ export class UserAdminService {
 
       return user.cooperative;
     } catch (error) {
-      // Si es una NotFoundException, reenviarla sin modificar
+
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`Error al obtener información de la cooperativa del usuario ${userId}: ${error.message}`, error.stack);
-      throw new InternalServerErrorException('Error al recuperar la información de la cooperativa del usuario');
+      PrismaErrorHandler.handleError(error, `getCooperativeInfoByUserId(${userId})`);
     }
   }
 }

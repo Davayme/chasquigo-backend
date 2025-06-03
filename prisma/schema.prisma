@@ -28,10 +28,11 @@ model Bus {
   licensePlate     String     @map("placa")
   chassisBrand     String     @map("marca_chasis")
   bodyworkBrand    String     @map("marca_carroceria")
-  photo            String     @map("fotografia")
+  photos           String[]   @map("fotografias") // Array de URLs de fotos
   capacity         Int        @map("capacidad")
   seatType         String     @map("tipo_asiento")
   stoppageDays     Int        @map("dias_parada")
+  floorCount       Int        @default(1) @map("numero_pisos") // Número de pisos del bus
   cooperative      Cooperative @relation(fields: [cooperativeId], references: [id])
   seats            BusSeat[]
   routeSheets      RouteSheet[]
@@ -44,7 +45,7 @@ model BusSeat {
   id          Int       @id @default(autoincrement()) @map("id_asiento")
   busId       Int       @map("id_bus")
   number      String    @map("numero")
-  type        String    @map("tipo") // normal/VIP
+  type        String    @map("tipo") // normal/VIP/discapacitado
   location    String    @map("ubicacion") // pasillo/ventana
   bus         Bus       @relation(fields: [busId], references: [id])
   tickets     Ticket[]

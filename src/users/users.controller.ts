@@ -22,8 +22,8 @@ export class UsersController {
   ) { }
 
   @Post('admin')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+/*   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin') */
   @ApiOperation({ summary: 'Crear usuario administrador' })
   @ApiResponse({ status: 201, description: 'Creado correctamente' })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
