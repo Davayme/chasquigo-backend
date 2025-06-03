@@ -30,7 +30,6 @@ model Bus {
   bodyworkBrand    String     @map("marca_carroceria")
   photos           String[]   @map("fotografias") // Array de URLs de fotos
   capacity         Int        @map("capacidad")
-  seatType         String     @map("tipo_asiento")
   stoppageDays     Int        @map("dias_parada")
   floorCount       Int        @default(1) @map("numero_pisos") // Número de pisos del bus
   cooperative      Cooperative @relation(fields: [cooperativeId], references: [id])
