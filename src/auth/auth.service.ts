@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/req/login.dto';
 import * as bcrypt from 'bcrypt';
+import { PrismaErrorHandler } from 'src/common/filters/prisma-errors';
 
 @Injectable()
 export class AuthService {
@@ -11,46 +12,55 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
-  ) {}
+  ) { }
 
   async validateUser(email: string, pass: string): Promise<any> {
     try {
-      // Buscar usuario por email
+      // Buscar usuario por email con select más eficiente
       const user = await this.prisma.user.findFirst({
-        where: { 
+        where: {
           email,
           isDeleted: false,
         },
-        include: {
-          role: true,
-        },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          password: true,
+          role: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        }
       });
 
       // Si el usuario existe y la contraseña es correcta
       if (user && await bcrypt.compare(pass, user.password)) {
-     
         const { password, ...result } = user;
         return result;
       }
-      
+
       return null;
     } catch (error) {
-      this.logger.error(`Error en validateUser: ${error.message}`, error.stack);
-      throw error;
+      // Usar el manejador centralizado de errores de Prisma
+      PrismaErrorHandler.handleError(error, 'validateUser');
     }
   }
 
   async login(loginDto: LoginDto) {
     try {
       const user = await this.validateUser(loginDto.email, loginDto.password);
-      
+
       if (!user) {
         throw new UnauthorizedException('Credenciales incorrectas');
       }
 
       // Crear payload para el token JWT
-      const payload = { 
-        sub: user.id, 
+      const payload = {
+        sub: user.id,
         email: user.email,
         role: user.role.name,
       };
@@ -76,9 +86,7 @@ export class AuthService {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
-      
-      this.logger.error(`Error en login: ${error.message}`, error.stack);
-      throw new UnauthorizedException('Error al iniciar sesión');
+      PrismaErrorHandler.handleError(error, 'login');
     }
   }
 }
