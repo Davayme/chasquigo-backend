@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
 import { UserAdminService } from './user-admin/user-admin.service';
 import { CreateUserDto } from './dtos/req/create-user.dto';
 import {
@@ -57,5 +57,12 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'Lista de todos los usuarios' })
   async getAllAdminUsers() {
     return this.userAdminService.getAllUsers();
+  }
+
+  @Get('cooperative/:userId')
+  @ApiOperation({ summary: 'Obtener información de cooperativa por ID de usuario' })
+  @ApiResponse({ status: 200, description: 'Información de cooperativa obtenida correctamente' })
+  async getCooperativeInfoByUserId(@Param('userId', ParseIntPipe) userId: number) {
+    return this.userAdminService.getCooperativeInfoByUserId(userId);
   }
 }
