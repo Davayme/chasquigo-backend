@@ -1,6 +1,5 @@
-// filepath: c:\Users\davay\Documents\Projects\Nestjs Projects\chasquigo-backend\src\users\users.controller.ts
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import { UserAdminService } from './user_admin/user-admin.service';
+import { UserAdminService } from './user-admin/user-admin.service';
 import { CreateUserDto } from './dtos/req/create-user.dto';
 import {
   ApiOperation,
@@ -8,8 +7,8 @@ import {
   ApiResponse,
   ApiBearerAuth
 } from '@nestjs/swagger';
-import { UserDriverService } from './user_admin/user-driver.service';
-import { UserClientService } from './user_admin/user-client.service';
+import { UserDriverService } from './user-driver/user-driver.service';
+import { UserClientService } from './user-client/user-client.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
