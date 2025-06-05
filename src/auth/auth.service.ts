@@ -89,4 +89,57 @@ export class AuthService {
       PrismaErrorHandler.handleError(error, 'login');
     }
   }
+
+  async getUserFromToken(user: any) {
+    try {
+      if (!user || !user.userId) {
+        throw new UnauthorizedException('Token inválido o mal formado');
+      }
+
+      const userDetails = await this.prisma.user.findUnique({
+        where: {
+          id: user.userId
+        },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          cooperative: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        }
+      });
+
+      if (!userDetails) {
+        throw new UnauthorizedException('Usuario no encontrado o desactivado');
+      }
+
+      return {
+        user: {
+          id: userDetails.id,
+          email: userDetails.email,
+          firstName: userDetails.firstName,
+          lastName: userDetails.lastName,
+          role: userDetails.role,
+          cooperative: userDetails.cooperative
+        }
+      };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      PrismaErrorHandler.handleError(error, 'getUserFromToken');
+    }
+  }
+
 }
