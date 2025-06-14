@@ -2,12 +2,13 @@ import { Injectable, ConflictException, NotFoundException, InternalServerErrorEx
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from '../dtos/req/create-user.dto';
 import * as bcrypt from 'bcrypt';
+import { PrismaErrorHandler } from 'src/common/filters/prisma-errors';
 
 @Injectable()
 export class UserAdminService {
   private readonly logger = new Logger(UserAdminService.name);
-  
-  constructor(private prisma: PrismaService) {}
+
+  constructor(private prisma: PrismaService) { }
 
   async createAdminUser(createAdminUserDto: CreateUserDto) {
     try {
@@ -73,25 +74,18 @@ export class UserAdminService {
 
       return newUser;
     } catch (error) {
-
+      // Si ya es una excepción HTTP conocida, la reenvío sin modificar
       if (error instanceof ConflictException || error instanceof NotFoundException) {
         throw error;
       }
       
-      // Para errores de Prisma o inesperados, los transformamos en mensajes más amigables
-      this.logger.error(`Error al crear usuario administrador: ${error.message}`, error.stack);
-      
-      if (error.code === 'P2002') {
-        throw new ConflictException('Ya existe un registro con estos datos');
-      }
-      
-      throw new InternalServerErrorException('Error al crear el usuario administrador');
+      // Usar el manejador centralizado para errores de Prisma
+      PrismaErrorHandler.handleError(error, 'createAdminUser');
     }
   }
 
   async getAllUsers() {
     try {
-
       // Obtener todos los usuarios con rol admin_coop
       return await this.prisma.user.findMany({
         where: {
@@ -119,8 +113,45 @@ export class UserAdminService {
         }
       });
     } catch (error) {
-      this.logger.error(`Error al obtener usuarios administradores: ${error.message}`, error.stack);
-      throw new InternalServerErrorException('Error al recuperar los usuarios administradores');
+      // Usar el manejador centralizado para errores de Prisma
+      PrismaErrorHandler.handleError(error, 'getAllUsers');
+    }
+  }
+
+  async getCooperativeInfoByUserId(userId: number) {
+    try {
+      // Obtener la cooperativa asociada al usuario
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          cooperative: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              logo: true,
+              phone: true,
+              email: true
+            }
+          }
+        }
+      });
+
+      if (!user) {
+        throw new NotFoundException('Usuario no encontrado');
+      }
+
+      if (!user.cooperative) {
+        throw new NotFoundException('Cooperativa no asociada al usuario');
+      }
+
+      return user.cooperative;
+    } catch (error) {
+
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      PrismaErrorHandler.handleError(error, `getCooperativeInfoByUserId(${userId})`);
     }
   }
 }

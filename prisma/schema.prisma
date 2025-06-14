@@ -80,21 +80,24 @@ model Bus {
   chassisBrand  String             @map("marca_chasis")
   bodyworkBrand String             @map("marca_carroceria")
   photo         String             @map("fotografia")
-  capacity      Int                @map("capacidad")
-  seatType      String             @map("tipo_asiento")
   stoppageDays  Int                @map("dias_parada")
+  busTypeId     Int                @map("id_tipo_bus")
   cooperative   Cooperative        @relation(fields: [cooperativeId], references: [id])
   seats         BusSeat[]
   routeSheets   RouteSheetDetail[]
+  busType       BusType            @relation(fields: [busTypeId], references: [id])
   isDeleted     Boolean            @default(false)
 
   @@map("buses")
 }
 
 model BusType {
-  id          Int         @id @default(autoincrement()) @map("id")
-  name        String      @map("nombre")
-  isDeleted   Boolean     @default(false)
+  id         Int     @id @default(autoincrement()) @map("id")
+  name       String  @map("nombre")
+  floorCount Int     @default(1) @map("numero_pisos") // Número de pisos del bus
+  capacity   Int     @default(0) @map("capacidad")
+  isDeleted  Boolean @default(false)
+  Bus        Bus[]
 
   @@map("tipos_bus")
 }
@@ -198,11 +201,10 @@ model User {
   email         String
   phone         String       @map("telefono")
   password      String
-  role          Role         @map("rol")
+  role          Role         @default(CLIENT) @map("rol")
   cooperativeId Int?         @map("id_cooperativa")
   cooperative   Cooperative? @relation(fields: [cooperativeId], references: [id])
 
-  userHistory UserHistory?
   tickets     Ticket[]
   isDeleted   Boolean      @default(false)
 
@@ -245,15 +247,4 @@ model Payment {
   tickets   Ticket[]
 
   @@map("pagos")
-}
-
-model UserHistory {
-  id             Int      @id @default(autoincrement()) @map("id")
-  userId         Int      @unique @map("id_usuario")
-  totalPurchases Int      @map("total_compras")
-  lastPurchase   DateTime @map("ultima_compra")
-  user           User     @relation(fields: [userId], references: [id])
-  isDeleted      Boolean  @default(false)
-
-  @@map("historial_usuario")
 }
