@@ -4,10 +4,11 @@ import { CooperativesModule } from './cooperatives/cooperatives.module';
 import { CommonModule } from './common/common.module';
 import { AuthModule } from './auth/auth.module';
 import { BusesModule } from './buses/buses.module';
+import { QrModule } from './qr/qr.module';
 
 
 @Module({
-  imports: [UsersModule, CooperativesModule, CommonModule, AuthModule, BusesModule],
+  imports: [UsersModule, CooperativesModule, CommonModule, AuthModule, BusesModule, QrModule ],
   controllers: [],
   providers: [],
 })
