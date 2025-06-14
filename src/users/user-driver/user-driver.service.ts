@@ -3,6 +3,7 @@ import { PrismaService } from "src/prisma/prisma.service";
 import { CreateUserDto } from "../dtos/req/create-user.dto";
 import * as bcrypt from 'bcrypt';
 import { PrismaErrorHandler } from "src/common/filters/prisma-errors";
+import { Role } from "@prisma/client";
 
 @Injectable()
 export class UserDriverService {
@@ -36,7 +37,7 @@ export class UserDriverService {
       }
 
       // ID de rol de cliente predefinido
-      const adminRoleId = 2;
+      const adminRoleId = Role.DRIVER;
 
       // Encriptar la contraseña
       const hashedPassword = await bcrypt.hash(createAdminUserDto.password, 10);
@@ -51,7 +52,7 @@ export class UserDriverService {
           email: createAdminUserDto.email,
           phone: createAdminUserDto.phone,
           password: hashedPassword,
-          roleId: adminRoleId,
+          role: adminRoleId,
           isDeleted: false
         },
         select: {
@@ -61,12 +62,7 @@ export class UserDriverService {
           lastName: true,
           email: true,
           phone: true,
-          role: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
+          role: true,
           cooperativeId: true
         }
       });

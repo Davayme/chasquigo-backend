@@ -79,8 +79,8 @@ model Bus {
   licensePlate  String             @map("placa")
   chassisBrand  String             @map("marca_chasis")
   bodyworkBrand String             @map("marca_carroceria")
-  photo         String             @map("fotografia")
-  stoppageDays  Int                @map("dias_parada")
+  photo         String?            @map("fotografia")
+  stoppageDays  Int                @default(2) @map("dias_parada")
   busTypeId     Int                @map("id_tipo_bus")
   cooperative   Cooperative        @relation(fields: [cooperativeId], references: [id])
   seats         BusSeat[]
