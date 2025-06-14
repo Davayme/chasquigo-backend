@@ -4,6 +4,7 @@ import { CooperativesModule } from './cooperatives/cooperatives.module';
 import { CommonModule } from './common/common.module';
 import { AuthModule } from './auth/auth.module';
 import { BusesModule } from './buses/buses.module';
+import { QrModule } from './qr/qr.module';
 import { StripeModule } from './stripe/stripe.module';
 
 
@@ -14,7 +15,8 @@ import { StripeModule } from './stripe/stripe.module';
     CommonModule, 
     AuthModule, 
     BusesModule, 
-    StripeModule
+    StripeModule,
+    QrModule
   ],
   controllers: [],
   providers: [],
