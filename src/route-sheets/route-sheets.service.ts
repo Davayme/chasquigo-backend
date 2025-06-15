@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { CreateRouteSheetDto } from './dto/create-route-sheet.dto';
-import { UpdateRouteSheetDto } from './dto/update-route-sheet.dto';
+import { CreateRouteSheetDto } from './dto/req/create-route-sheet.dto';
+import { UpdateRouteSheetDto } from './dto/req/update-route-sheet.dto';
 
 @Injectable()
 export class RouteSheetsService {

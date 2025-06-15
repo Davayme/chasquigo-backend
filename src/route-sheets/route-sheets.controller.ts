@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
 import { RouteSheetsService } from './route-sheets.service';
-import { CreateRouteSheetDto } from './dto/create-route-sheet.dto';
-import { UpdateRouteSheetDto } from './dto/update-route-sheet.dto';
+import { CreateRouteSheetDto } from './dto/req/create-route-sheet.dto';
+import { UpdateRouteSheetDto } from './dto/req/update-route-sheet.dto';
 
 @Controller('route-sheets')
 export class RouteSheetsController {

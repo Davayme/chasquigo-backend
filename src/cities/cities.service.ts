@@ -1,26 +1,40 @@
 import { Injectable } from '@nestjs/common';
-import { CreateCityDto } from './dto/create-city.dto';
-import { UpdateCityDto } from './dto/update-city.dto';
+import { CreateCityDto } from './dto/req/create-city.dto';
+import { UpdateCityDto } from './dto/req/update-city.dto';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaErrorHandler } from 'src/common/filters/prisma-errors';
 
 @Injectable()
 export class CitiesService {
-  create(createCityDto: CreateCityDto) {
-    return 'This action adds a new city';
+  constructor(private readonly prisma: PrismaService) { }
+
+  async create(createCityDto: CreateCityDto) {
+    return this.prisma.city.create({ data: createCityDto }).catch((error) => {
+      PrismaErrorHandler.handleError(error, 'Crear Ciudad');
+    });
   }
 
-  findAll() {
-    return `This action returns all cities`;
+  async findAll() {
+    return this.prisma.city.findMany({ where: { isDeleted: false } }).catch((error) => {
+      PrismaErrorHandler.handleError(error, 'Buscar Ciudades');
+    });
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} city`;
+  async findOne(id: number) {
+    return this.prisma.city.findUnique({ where: { id, isDeleted: false } }).catch((error) => {
+      PrismaErrorHandler.handleError(error, 'Buscar Ciudad por ID');
+    });
   }
 
-  update(id: number, updateCityDto: UpdateCityDto) {
-    return `This action updates a #${id} city`;
+  async update(id: number, updateCityDto: UpdateCityDto) {
+    return this.prisma.city.update({ where: { id }, data: updateCityDto }).catch((error) => {
+      PrismaErrorHandler.handleError(error, 'Actualizar Ciudad');
+    });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} city`;
+  async remove(id: number) {
+    return this.prisma.city.update({ where: { id }, data: { isDeleted: true } }).catch((error) => {
+      PrismaErrorHandler.handleError(error, 'Eliminar Ciudad');
+    });
   }
 }

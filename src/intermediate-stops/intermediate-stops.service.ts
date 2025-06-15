@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { CreateIntermediateStopDto } from './dto/create-intermediate-stop.dto';
-import { UpdateIntermediateStopDto } from './dto/update-intermediate-stop.dto';
+import { CreateIntermediateStopDto } from './dto/req/create-intermediate-stop.dto';
+import { UpdateIntermediateStopDto } from './dto/req/update-intermediate-stop.dto';
 
 @Injectable()
 export class IntermediateStopsService {

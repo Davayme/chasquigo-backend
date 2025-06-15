@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { FrequenciesService } from './frequencies.service';
 import { CreateFrequencyDto } from './dto/req/create-frequency.dto';
 import { UpdateFrequencyDto } from './dto/req/update-frequency.dto';
@@ -23,7 +31,10 @@ export class FrequenciesController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateFrequencyDto: UpdateFrequencyDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateFrequencyDto: UpdateFrequencyDto,
+  ) {
     return this.frequenciesService.update(+id, updateFrequencyDto);
   }
 

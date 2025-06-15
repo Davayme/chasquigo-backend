@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
 import { IntermediateStopsService } from './intermediate-stops.service';
-import { CreateIntermediateStopDto } from './dto/create-intermediate-stop.dto';
-import { UpdateIntermediateStopDto } from './dto/update-intermediate-stop.dto';
+import { CreateIntermediateStopDto } from './dto/req/create-intermediate-stop.dto';
+import { UpdateIntermediateStopDto } from './dto/req/update-intermediate-stop.dto';
 
 @Controller('intermediate-stops')
 export class IntermediateStopsController {

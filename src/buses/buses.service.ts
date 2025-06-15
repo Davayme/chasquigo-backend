@@ -11,7 +11,7 @@ export class BusesService {
 
   async create(createBusDto: CreateBusDto) {
     try {
-      const { seats, ...busData } = createBusDto;
+      const {...busData } = createBusDto;
 
       return await this.prisma.$transaction(async (prisma) => {
         const bus = await prisma.bus.create({
@@ -20,15 +20,14 @@ export class BusesService {
             licensePlate: busData.licensePlate,
             chassisBrand: busData.chassisBrand,
             bodyworkBrand: busData.bodyworkBrand,
-            photos: busData.photos,
-            capacity: busData.capacity,
+            photo: busData.photo,
             stoppageDays: busData.stoppageDays ?? 0,
-            floorCount: busData.floorCount,
-          } as Prisma.BusUncheckedCreateInput,
+            busTypeId: busData.busTypeId,
+          },
         });
 
         // Crear asientos asociados
-        const seatsData = seats.map(seat => ({
+        const seatsData = busData.seats.map(seat => ({
           ...seat,
           busId: bus.id,
         }));
@@ -104,10 +103,9 @@ export class BusesService {
             ...(busData.licensePlate && { licensePlate: busData.licensePlate }),
             ...(busData.chassisBrand && { chassisBrand: busData.chassisBrand }),
             ...(busData.bodyworkBrand && { bodyworkBrand: busData.bodyworkBrand }),
-            ...(busData.photos && { photos: busData.photos }),
-            ...(busData.capacity && { capacity: busData.capacity }),
+            ...(busData.photo && { photo: busData.photo }),
             ...(busData.stoppageDays !== undefined && { stoppageDays: busData.stoppageDays }),
-            ...(busData.floorCount && { floorCount: busData.floorCount }),
+            ...(busData.busTypeId && { busTypeId: busData.busTypeId }),
           }
         });
 

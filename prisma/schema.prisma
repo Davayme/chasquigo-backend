@@ -135,7 +135,7 @@ model Frequency {
 
 model City {
   id                     Int                @id @default(autoincrement()) @map("id")
-  name                   String             @map("nombre")
+  name                   String             @unique @map("nombre")
   province               Province           @map("provincia")
   isDeleted              Boolean            @default(false)
   originFrequencies      Frequency[]        @relation("originCity")
