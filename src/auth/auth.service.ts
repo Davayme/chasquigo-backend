@@ -28,12 +28,7 @@ export class AuthService {
           firstName: true,
           lastName: true,
           password: true,
-          role: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
+          role: true,
         }
       });
 
@@ -62,7 +57,7 @@ export class AuthService {
       const payload = {
         sub: user.id,
         email: user.email,
-        role: user.role.name,
+        role: user.role,
       };
 
       // Generar token JWT
@@ -76,10 +71,7 @@ export class AuthService {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
-          role: {
-            id: user.role.id,
-            name: user.role.name,
-          },
+          role: user.role,
         },
       };
     } catch (error) {
@@ -105,12 +97,7 @@ export class AuthService {
           email: true,
           firstName: true,
           lastName: true,
-          role: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
+          role: true,
           cooperative: {
             select: {
               id: true,

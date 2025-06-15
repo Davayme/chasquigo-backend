@@ -3,10 +3,40 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { HttpExceptionFilter } from './common/filters/http-error-filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { join } from 'path';
+import * as express from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'debug', 'log', 'verbose'],
+  });
+  // Configurar el adaptador HTTP
+  const httpAdapter = app.getHttpAdapter();
+  const expressApp = httpAdapter.getInstance();
+  
+  // Configurar proxy
+  expressApp.set('trust proxy', true);
+  
+  // Asegurar que el directorio de updates exista
+  const updatesPath = join(process.cwd(), 'updates');
+  const fs = await import('fs/promises');
+  try {
+    await fs.mkdir(updatesPath, { recursive: true });
+    console.log(`Directorio de uploads configurado en: ${updatesPath}`);
+  } catch (error) {
+    console.error('Error al configurar el directorio de uploads:', error);
+  }
+  
+  // Configurar archivos estáticos
+  expressApp.use('/updates', express.static(updatesPath, {
+    index: false,  // No permitir listado de directorios
+    redirect: false // No permitir redirecciones
+  }));
+  
+  // Middleware para loggear las peticiones a archivos estáticos
+  expressApp.use('/updates', (req, res, next) => {
+    console.log(`Solicitud a archivo estático: ${req.path}`);
+    next();
   });
 
   // Habilitar CORS

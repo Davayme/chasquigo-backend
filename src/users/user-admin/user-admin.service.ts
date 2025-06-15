@@ -1,14 +1,21 @@
-import { Injectable, ConflictException, NotFoundException, InternalServerErrorException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from '../dtos/req/create-user.dto';
 import * as bcrypt from 'bcrypt';
 import { PrismaErrorHandler } from 'src/common/filters/prisma-errors';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class UserAdminService {
   private readonly logger = new Logger(UserAdminService.name);
 
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async createAdminUser(createAdminUserDto: CreateUserDto) {
     try {
@@ -16,8 +23,8 @@ export class UserAdminService {
       const existingUser = await this.prisma.user.findFirst({
         where: {
           email: createAdminUserDto.email,
-          isDeleted: false
-        }
+          isDeleted: false,
+        },
       });
 
       if (existingUser) {
@@ -28,16 +35,18 @@ export class UserAdminService {
       const existingIdNumber = await this.prisma.user.findFirst({
         where: {
           idNumber: createAdminUserDto.idNumber,
-          isDeleted: false
-        }
+          isDeleted: false,
+        },
       });
 
       if (existingIdNumber) {
-        throw new ConflictException('El número de identificación ya está registrado');
+        throw new ConflictException(
+          'El número de identificación ya está registrado',
+        );
       }
 
       // ID de rol de admin_coop predefinido
-      const adminRoleId = 1;
+      const adminRoleId = Role.ADMIN;
 
       // Encriptar la contraseña
       const hashedPassword = await bcrypt.hash(createAdminUserDto.password, 10);
@@ -52,8 +61,8 @@ export class UserAdminService {
           email: createAdminUserDto.email,
           phone: createAdminUserDto.phone,
           password: hashedPassword,
-          roleId: adminRoleId,
-          isDeleted: false
+          role: adminRoleId,
+          isDeleted: false,
         },
         select: {
           id: true,
@@ -62,23 +71,21 @@ export class UserAdminService {
           lastName: true,
           email: true,
           phone: true,
-          role: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
-          cooperativeId: true
-        }
+          role: true,
+          cooperativeId: true,
+        },
       });
 
       return newUser;
     } catch (error) {
       // Si ya es una excepción HTTP conocida, la reenvío sin modificar
-      if (error instanceof ConflictException || error instanceof NotFoundException) {
+      if (
+        error instanceof ConflictException ||
+        error instanceof NotFoundException
+      ) {
         throw error;
       }
-      
+
       // Usar el manejador centralizado para errores de Prisma
       PrismaErrorHandler.handleError(error, 'createAdminUser');
     }
@@ -89,7 +96,7 @@ export class UserAdminService {
       // Obtener todos los usuarios con rol admin_coop
       return await this.prisma.user.findMany({
         where: {
-          isDeleted: false
+          isDeleted: false,
         },
         select: {
           id: true,
@@ -98,19 +105,14 @@ export class UserAdminService {
           lastName: true,
           email: true,
           phone: true,
-          role: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
+          role: true,
           cooperative: {
             select: {
               id: true,
-              name: true
-            }
-          }
-        }
+              name: true,
+            },
+          },
+        },
       });
     } catch (error) {
       // Usar el manejador centralizado para errores de Prisma
@@ -131,10 +133,10 @@ export class UserAdminService {
               address: true,
               logo: true,
               phone: true,
-              email: true
-            }
-          }
-        }
+              email: true,
+            },
+          },
+        },
       });
 
       if (!user) {
@@ -147,11 +149,13 @@ export class UserAdminService {
 
       return user.cooperative;
     } catch (error) {
-
       if (error instanceof NotFoundException) {
         throw error;
       }
-      PrismaErrorHandler.handleError(error, `getCooperativeInfoByUserId(${userId})`);
+      PrismaErrorHandler.handleError(
+        error,
+        `getCooperativeInfoByUserId(${userId})`,
+      );
     }
   }
 }
