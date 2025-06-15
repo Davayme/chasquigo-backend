@@ -3,11 +3,11 @@ import {
   Get,
   Post,
   Body,
-  Patch,
   Param,
   Delete,
   Put,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
 import { FrequenciesService } from './frequencies.service';
 import { CreateFrequencyDto } from './dto/req/create-frequency.dto';
@@ -37,7 +37,7 @@ export class FrequenciesController {
     description: 'Lista de frecuencias ',
   })
 
-  findByCooperative(@Param('cooperativeId', ParseIntPipe) cooperativeId: number) {
+  findByCooperative(@Query('cooperativeId', ParseIntPipe) cooperativeId: number) {
     return this.frequenciesService.findAllByCooperative(cooperativeId);
   }
 
