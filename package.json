@@ -18,10 +18,10 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "prisma:seed": "bun run prisma:seed:ts",
+    "prisma:seed": "npm run prisma:seed:ts",
     "prisma:seed:ts": "bun --bun prisma/seed.ts",
-    "db:setup": "npx prisma migrate dev --name init && bun run prisma:seed",
-    "db:reset": "npx prisma migrate reset --force && bun run prisma:seed"
+    "db:setup": "npx prisma migrate dev --name init && npm run prisma:seed",
+    "db:reset": "npx prisma migrate reset --force && npm run prisma:seed"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.2",

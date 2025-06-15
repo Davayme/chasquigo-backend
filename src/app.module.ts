@@ -6,6 +6,12 @@ import { AuthModule } from './auth/auth.module';
 import { BusesModule } from './buses/buses.module';
 import { QrModule } from './qr/qr.module';
 import { StripeModule } from './stripe/stripe.module';
+import { FrequenciesModule } from './frequencies/frequencies.module';
+import { CitiesModule } from './cities/cities.module';
+import { IntermediateStopsModule } from './intermediate-stops/intermediate-stops.module';
+import { RouteSheetsModule } from './route-sheets/route-sheets.module';
+import { TicketsModule } from './tickets/tickets.module';
+import { PaymentsModule } from './payments/payments.module';
 
 
 @Module({
@@ -16,7 +22,13 @@ import { StripeModule } from './stripe/stripe.module';
     AuthModule, 
     BusesModule, 
     StripeModule,
-    QrModule
+    QrModule,
+    FrequenciesModule,
+    CitiesModule,
+    IntermediateStopsModule,
+    RouteSheetsModule,
+    TicketsModule,
+    PaymentsModule
   ],
   controllers: [],
   providers: [],
