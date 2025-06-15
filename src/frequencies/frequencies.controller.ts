@@ -16,7 +16,7 @@ import { ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 
 @Controller('frequencies')
 export class FrequenciesController {
-  constructor(private readonly frequenciesService: FrequenciesService) {}
+  constructor(private readonly frequenciesService: FrequenciesService) { }
 
   @Post()
   @ApiOperation({ summary: 'Crear una nueva frecuencia' })
@@ -31,13 +31,14 @@ export class FrequenciesController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Obtener todas las frecuencias' })
+  @ApiOperation({ summary: 'Obtener todas las frecuencias de una cooperativa' })
   @ApiResponse({
     status: 200,
-    description: 'Lista de frecuencias',
+    description: 'Lista de frecuencias ',
   })
-  findAll() {
-    return this.frequenciesService.findAll();
+
+  findByCooperative(@Param('cooperativeId', ParseIntPipe) cooperativeId: number) {
+    return this.frequenciesService.findAllByCooperative(cooperativeId);
   }
 
   @Get(':id')

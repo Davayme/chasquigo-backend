@@ -16,11 +16,18 @@ export class FrequenciesService {
     });
   }
 
-  async findAll() {
-    return this.prisma.frequency.findMany({ where: { isDeleted: false } }).catch((error) => {
-      PrismaErrorHandler.handleError(error, 'Buscar Frecuencias');
+  async findAllByCooperative(cooperativeId: number) {
+    return this.prisma.frequency.findMany({
+      where: { cooperativeId, isDeleted: false },
+      include: {
+        originCity: true,
+        destinationCity: true,
+      },
+    }).catch((error) => {
+      PrismaErrorHandler.handleError(error, 'Buscar Frecuencias por Cooperativa');
     });
   }
+
 
   async findOne(id: number) {
     return this.prisma.frequency.findUnique({ where: { id, isDeleted: false } }).catch((error) => {
