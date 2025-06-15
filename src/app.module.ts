@@ -12,6 +12,7 @@ import { IntermediateStopsModule } from './intermediate-stops/intermediate-stops
 import { RouteSheetsModule } from './route-sheets/route-sheets.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { PaymentsModule } from './payments/payments.module';
+import { CloudinaryModule } from './cloudinary/cloudinary.module';
 
 
 @Module({
@@ -28,7 +29,8 @@ import { PaymentsModule } from './payments/payments.module';
     IntermediateStopsModule,
     RouteSheetsModule,
     TicketsModule,
-    PaymentsModule
+    PaymentsModule,
+    CloudinaryModule
   ],
   controllers: [],
   providers: [],

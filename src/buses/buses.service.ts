@@ -3,7 +3,6 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateBusDto } from './dto/create-bus.dto';
 import { UpdateBusDto } from './dto/update-bus.dto';
 import { PrismaErrorHandler } from 'src/common/filters/prisma-errors';
-import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class BusesService {

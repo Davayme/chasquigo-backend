@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/commo
 import { IntermediateStopsService } from './intermediate-stops.service';
 import { CreateIntermediateStopDto } from './dto/req/create-intermediate-stop.dto';
 import { UpdateIntermediateStopDto } from './dto/req/update-intermediate-stop.dto';
+import { GetRouteCitiesDto } from './dto/req/get-route-cities.dto';
 
 @Controller('intermediate-stops')
 export class IntermediateStopsController {
@@ -30,5 +31,10 @@ export class IntermediateStopsController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.intermediateStopsService.remove(+id);
+  }
+
+  @Post('ciudades')
+  obtenerCiudadesIntermedias(@Body() getRouteCitiesDto: GetRouteCitiesDto) {
+    return this.intermediateStopsService.obtenerCiudadesIntermedias(getRouteCitiesDto);
   }
 }
