@@ -9,6 +9,7 @@ export class CitiesService {
   constructor(private readonly prisma: PrismaService) { }
 
   async create(createCityDto: CreateCityDto) {
+    createCityDto.name = createCityDto.name.toLowerCase();
     return this.prisma.city.create({ data: createCityDto }).catch((error) => {
       PrismaErrorHandler.handleError(error, 'Crear Ciudad');
     });
@@ -26,7 +27,14 @@ export class CitiesService {
     });
   }
 
+  async findByName(name: string) {
+    return this.prisma.city.findUnique({ where: { name: name.toLowerCase(), isDeleted: false } }).catch((error) => {
+      PrismaErrorHandler.handleError(error, 'Buscar Ciudad por Nombre');
+    });
+  }
+
   async update(id: number, updateCityDto: UpdateCityDto) {
+    updateCityDto.name = updateCityDto.name.toLowerCase();
     return this.prisma.city.update({ where: { id }, data: updateCityDto }).catch((error) => {
       PrismaErrorHandler.handleError(error, 'Actualizar Ciudad');
     });

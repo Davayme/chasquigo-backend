@@ -33,6 +33,7 @@ enum Province {
   SUCUMBIOS
   TUNGURAHUA
   ZAMORA_CHINCHIPE
+  SIN_ASIGNAR
 }
 
 enum Role {

@@ -55,6 +55,19 @@ export class CitiesController {
     return this.citiesService.findOne(id);
   }
 
+  @Get('/name/:name')
+  @ApiOperation({ summary: 'Obtener una ciudad por nombre' })
+  @ApiParam({ name: 'name', description: 'Nombre de la ciudad', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'Ciudad obtenida exitosamente',
+  })
+  @ApiResponse({ status: 404, description: 'Ciudad no encontrada' })
+  findByName(@Param('name') name: string) {
+    return this.citiesService.findByName(name);
+  }
+
+
   @Put(':id')
   @ApiOperation({ summary: 'Actualizar una ciudad por ID' })
   @ApiParam({ name: 'id', description: 'ID de la ciudad', type: 'number' })
