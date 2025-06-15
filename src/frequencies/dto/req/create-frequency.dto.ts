@@ -40,5 +40,10 @@ export class CreateFrequencyDto {
         example: 'Activo',
     })
     status: string;
+
+    @ApiProperty({
+        description: 'URL de archivo de la resolución de la ANT',
+        example: 'Activo',
+    })
     antResolution: string;
 }
