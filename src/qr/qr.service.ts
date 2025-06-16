@@ -80,7 +80,7 @@ export class QrService {
                 },
                 routeSheet: {
                     include: {
-                        route: true,
+                        frequency: true,
                         bus: {
                             select: {
                                 licensePlate: true
@@ -88,7 +88,9 @@ export class QrService {
                         }
                     }
                 },
-                seat: true
+                seat: true,
+                originStop: true,
+                destinationStop: true
             }
         });
 
@@ -105,10 +107,10 @@ export class QrService {
             ticketId: ticket.id,
             passengerId: ticket.user.idNumber,
             passengerName: `${ticket.user.firstName} ${ticket.user.lastName}`,
-            origin: ticket.originStop,
-            destination: ticket.destinationStop,
+            origin: ticket.originStop.name,
+            destination: ticket.destinationStop.name,
             date: ticket.routeSheet.date.toISOString().split('T')[0],
-            time: ticket.routeSheet.route.departureTime,
+            time: ticket.routeSheet.frequency.departureTime,
             bus: ticket.routeSheet.bus.licensePlate,
             seat: ticket.seat.number,
             hash: hash.substring(0, 16), // Usar solo parte del hash por seguridad y tamaño

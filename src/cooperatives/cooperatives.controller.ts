@@ -30,8 +30,8 @@ export class CooperativesController {
   constructor(private readonly service: CooperativesService) { }
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+ /*  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin') */
   @ApiBearerAuth('JWT')
   @ApiOperation({ summary: 'Crear una nueva cooperativa' })
   @ApiResponse({
@@ -46,8 +46,8 @@ export class CooperativesController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth('JWT')
+ /*  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT') */
   @ApiOperation({ summary: 'Obtener todas las cooperativas' })
   @ApiResponse({
     status: 200,
@@ -59,8 +59,8 @@ export class CooperativesController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth('JWT')
+  /* @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT') */
   @ApiOperation({ summary: 'Obtener una cooperativa por ID' })
   @ApiResponse({
     status: 200,
@@ -73,8 +73,8 @@ export class CooperativesController {
   }
 
   @Put(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  /* @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin') */
   @ApiBearerAuth('JWT')
   @ApiOperation({ summary: 'Actualizar cooperativa' })
   @ApiResponse({
@@ -92,8 +92,8 @@ export class CooperativesController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+ /*  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin') */
   @ApiBearerAuth('JWT')
   @ApiOperation({ summary: 'Eliminar una cooperativa' })
   @ApiResponse({ status: 200, description: 'Cooperativa eliminada' })
@@ -106,8 +106,8 @@ export class CooperativesController {
   }
 
   @Get(':id/buses')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth('JWT')
+ /*  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT') */
   @ApiOperation({ summary: 'Obtener los buses de una cooperativa' })
   @ApiResponse({ status: 200, description: 'Lista de buses' })
   @ApiResponse({ status: 404, description: 'Cooperativa no encontrada' })

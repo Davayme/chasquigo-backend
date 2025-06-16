@@ -5,7 +5,7 @@ import { StripeController } from './stripe.controller';
 import { CommonModule } from 'src/common/common.module';
 
 @Module({
-  imports: [CommonModule, ConfigModule],
+  imports: [ ConfigModule],
   controllers: [StripeController],
   providers: [StripeService],
   exports: [StripeService],
