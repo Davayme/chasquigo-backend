@@ -139,8 +139,8 @@ export class RouteSheetsService {
       const routeSheet = await tx.routeSheetHeader.create({
         data: {
           ...routeSheetData,
-          startDate,
-          endDate,
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
           status: routeSheetData.status || 'Pendiente',
         },
       });
