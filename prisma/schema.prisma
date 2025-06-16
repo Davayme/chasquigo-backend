@@ -162,6 +162,7 @@ model IntermediateStop {
 
 model RouteSheetHeader {
   id                Int                @id @default(autoincrement()) @map("id")
+  cooperativeId     Int                @map("id_cooperativa")
   startDate         DateTime           @map("fecha_inicio")
   endDate           DateTime           @map("fecha_fin")
   status            String             @map("estado")

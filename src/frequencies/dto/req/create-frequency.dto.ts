@@ -9,6 +9,7 @@ export class CreateFrequencyDto {
     @IsNumber()
     @IsNotEmpty()
     cooperativeId: number;
+
     @ApiProperty({
         description: 'ID de la ciudad de origen',
         example: 1,
@@ -27,7 +28,7 @@ export class CreateFrequencyDto {
     
     @ApiProperty({
         description: 'Hora de salida',
-        example: '2025-06-15T09:00:00.000Z',
+        example: '09:00',
     })
     @IsString()
     @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
@@ -39,11 +40,15 @@ export class CreateFrequencyDto {
         description: 'Estado de la frecuencia',
         example: 'Activo',
     })
+    @IsString()
+    @IsNotEmpty()
     status: string;
 
     @ApiProperty({
         description: 'URL de archivo de la resolución de la ANT',
-        example: 'Activo',
+        example: '/uploads/ant_resolution.pdf',
     })
+    @IsString()
+    @IsNotEmpty()
     antResolution: string;
 }

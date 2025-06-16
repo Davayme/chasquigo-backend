@@ -36,7 +36,7 @@ export class FrequenciesController {
     status: 200,
     description: 'Lista de frecuencias ',
   })
-
+  @ApiResponse({ status: 404, description: 'No se encontraron frecuencias' })
   findByCooperative(@Query('cooperativeId', ParseIntPipe) cooperativeId: number) {
     return this.frequenciesService.findAllByCooperative(cooperativeId);
   }
