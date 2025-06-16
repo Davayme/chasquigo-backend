@@ -224,7 +224,6 @@ model Ticket {
   price             Decimal          @map("precio") @db.Decimal(10, 2)
   discount          Decimal          @map("descuento") @db.Decimal(10, 2)
   status            String           @map("estado")
-  qrCode            String           @unique @map("codigo_qr")
   originStopId      Int              @map("parada_origen")
   destinationStopId Int              @map("parada_destino")
   paymentId         Int              @map("id_pago")
