@@ -21,14 +21,15 @@ export class BusesController {
     return this.busesService.create(createBusDto);
   }
 
-  @Get()
+  @Get('cooperative/:id')
   @ApiOperation({ summary: 'Obtener todos los buses activos' })
+  @ApiParam({ name: 'id', description: 'ID de la cooperativa', type: 'number' })
   @ApiResponse({ 
     status: 200, 
     description: 'Lista de buses activos con sus asientos' 
   })
-  findAll() {
-    return this.busesService.findAll();
+  findAll(@Param('id', ParseIntPipe) id: number) {
+    return this.busesService.findAll(id);
   }
 
   @Get(':id')
