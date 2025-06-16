@@ -23,12 +23,13 @@ export class BusesController {
 
   @Get()
   @ApiOperation({ summary: 'Obtener todos los buses activos' })
+  @ApiParam({ name: 'cooperativeId', description: 'ID de la cooperativa', type: 'number' })
   @ApiResponse({ 
     status: 200, 
     description: 'Lista de buses activos con sus asientos' 
   })
-  findAll() {
-    return this.busesService.findAll();
+  findAll(@Param('cooperativeId', ParseIntPipe) cooperativeId: number) {
+    return this.busesService.findAll(cooperativeId);
   }
 
   @Get(':id')
