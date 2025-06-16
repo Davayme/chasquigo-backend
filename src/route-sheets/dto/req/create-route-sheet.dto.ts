@@ -7,15 +7,15 @@ export class CreateRouteSheetDto {
   @IsNotEmpty()
   cooperativeId: number;
 
-  @ApiProperty({ description: 'Fecha de inicio de la hoja de ruta', type: String, format: 'date-time', example: '2025-06-15T00:00:00.000Z' })
-  @IsDateString()
+  @ApiProperty({ description: 'Fecha de inicio de la hoja de ruta', type: String, format: 'date-time', example: '2025-06-15' })
+  @IsString()
   @IsNotEmpty()
-  startDate: Date;
+  startDate: string;
 
-  @ApiProperty({ description: 'Fecha de fin de la hoja de ruta', type: String, format: 'date-time', example: '2025-06-25T00:00:00.000Z' })
-  @IsDateString()
+  @ApiProperty({ description: 'Fecha de fin de la hoja de ruta', type: String, format: 'date-time', example: '2025-06-25' })
+  @IsString()
   @IsNotEmpty()
-  endDate: Date;
+  endDate: string;
 
   @ApiProperty({ 
     description: 'IDs de las frecuencias que se incluirán en la hoja de ruta', 
