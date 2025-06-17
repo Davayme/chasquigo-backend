@@ -24,11 +24,12 @@ export class IntermediateStopsService {
     });
   }
 
-  async findAll() {
+  async findAll(frequencyId: number) {
     return this.prisma.intermediateStop.findMany(
       {
         where: {
           isDeleted: false,
+          frequencyId,
         },
         include: {
           city: true,

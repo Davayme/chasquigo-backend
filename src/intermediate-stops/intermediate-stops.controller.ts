@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Put } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Put, ParseIntPipe } from '@nestjs/common';
 import { IntermediateStopsService } from './intermediate-stops.service';
 import { CreateIntermediateStopDto } from './dto/req/create-intermediate-stop.dto';
 import { UpdateIntermediateStopDto } from './dto/req/update-intermediate-stop.dto';
@@ -21,15 +21,16 @@ export class IntermediateStopsController {
     return this.intermediateStopsService.create(createIntermediateStopDto);
   }
 
-  @Get()
+  @Get('frequency/:frequencyId')
   @ApiOperation({ summary: 'Obtener todas las paradas intermedias' })
+  @ApiParam({ name: 'frequencyId', description: 'ID de la frecuencia', type: 'number' })
   @ApiResponse({
     status: 200,
     description: 'Paradas intermedias obtenidas exitosamente',
   })
   @ApiResponse({ status: 404, description: 'Parada intermedia no encontrada' })
-  findAll() {
-    return this.intermediateStopsService.findAll();
+  findAll(@Param('frequencyId', ParseIntPipe) frequencyId: number) {
+    return this.intermediateStopsService.findAll(frequencyId);
   }
 
   @Get(':id')

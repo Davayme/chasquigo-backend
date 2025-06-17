@@ -48,10 +48,10 @@ export class BusesService {
     }
   }
 
-  async findAll() {
+  async findAll(cooperativeId: number) {
     try {
       return await this.prisma.bus.findMany({
-        where: { isDeleted: false },
+        where: { isDeleted: false, cooperativeId },
         include: { seats: { where: { isDeleted: false } } }
       });
     } catch (error) {
