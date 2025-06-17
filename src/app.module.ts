@@ -13,6 +13,7 @@ import { RouteSheetsModule } from './route-sheets/route-sheets.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { PaymentsModule } from './payments/payments.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { AwsModule } from './aws/aws.module';
 
 
 @Module({
@@ -30,7 +31,8 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
     RouteSheetsModule,
     TicketsModule,
     PaymentsModule,
-    CloudinaryModule
+    CloudinaryModule,
+    AwsModule
   ],
   controllers: [],
   providers: [],

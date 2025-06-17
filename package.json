@@ -24,6 +24,8 @@
     "db:reset": "npx prisma migrate reset --force && npm run prisma:seed"
   },
   "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.830.0",
+    "@aws-sdk/client-textract": "^3.830.0",
     "@mapbox/polyline": "^1.2.1",
     "@nestjs/common": "^11.1.2",
     "@nestjs/config": "^4.0.2",
