@@ -13,6 +13,8 @@ import { RouteSheetsModule } from './route-sheets/route-sheets.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { PaymentsModule } from './payments/payments.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { AwsModule } from './aws/aws.module';
+import { DriversModule } from './drivers/drivers.module';
 
 
 @Module({
