@@ -3,7 +3,6 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateBusDto } from './dto/create-bus.dto';
 import { UpdateBusDto } from './dto/update-bus.dto';
 import { PrismaErrorHandler } from 'src/common/filters/prisma-errors';
-import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class BusesService {
@@ -11,7 +10,7 @@ export class BusesService {
 
   async create(createBusDto: CreateBusDto) {
     try {
-      const { seats, ...busData } = createBusDto;
+      const {...busData } = createBusDto;
 
       return await this.prisma.$transaction(async (prisma) => {
         const bus = await prisma.bus.create({
@@ -20,15 +19,14 @@ export class BusesService {
             licensePlate: busData.licensePlate,
             chassisBrand: busData.chassisBrand,
             bodyworkBrand: busData.bodyworkBrand,
-            photos: busData.photos,
-            capacity: busData.capacity,
+            photo: busData.photo,
             stoppageDays: busData.stoppageDays ?? 0,
-            floorCount: busData.floorCount,
-          } as Prisma.BusUncheckedCreateInput,
+            busTypeId: busData.busTypeId,
+          },
         });
 
         // Crear asientos asociados
-        const seatsData = seats.map(seat => ({
+        const seatsData = busData.seats.map(seat => ({
           ...seat,
           busId: bus.id,
         }));
@@ -50,10 +48,10 @@ export class BusesService {
     }
   }
 
-  async findAll() {
+  async findAll(cooperativeId: number) {
     try {
       return await this.prisma.bus.findMany({
-        where: { isDeleted: false },
+        where: { isDeleted: false, cooperativeId },
         include: { seats: { where: { isDeleted: false } } }
       });
     } catch (error) {
@@ -104,10 +102,9 @@ export class BusesService {
             ...(busData.licensePlate && { licensePlate: busData.licensePlate }),
             ...(busData.chassisBrand && { chassisBrand: busData.chassisBrand }),
             ...(busData.bodyworkBrand && { bodyworkBrand: busData.bodyworkBrand }),
-            ...(busData.photos && { photos: busData.photos }),
-            ...(busData.capacity && { capacity: busData.capacity }),
+            ...(busData.photo && { photo: busData.photo }),
             ...(busData.stoppageDays !== undefined && { stoppageDays: busData.stoppageDays }),
-            ...(busData.floorCount && { floorCount: busData.floorCount }),
+            ...(busData.busTypeId && { busTypeId: busData.busTypeId }),
           }
         });
 

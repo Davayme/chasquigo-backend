@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -7,165 +8,264 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Province {
+  AZUAY
+  BOLIVAR
+  CANAR
+  CARCHI
+  CHIMBORAZO
+  COTOPAXI
+  EL_ORO
+  ESMERALDAS
+  GALAPAGOS
+  GUAYAS
+  IMBABURA
+  LOJA
+  LOS_RIOS
+  MANABI
+  MORONA_SANTIAGO
+  NAPO
+  ORELLANA
+  PASTAZA
+  PICHINCHA
+  SANTA_ELENA
+  SANTO_DOMINGO_DE_LOS_TSACHILAS
+  SUCUMBIOS
+  TUNGURAHUA
+  ZAMORA_CHINCHIPE
+  SIN_ASIGNAR
+}
+
+enum Role {
+  ADMIN
+  CLIENT
+  DRIVER
+  WORKER
+}
+
+enum DocumentType {
+  CEDULA
+  RUC
+}
+
+enum PassengerType {
+  NORMAL
+  CHILD
+  SENIOR
+  HANDICAPPED
+}
+
+enum SeatType {
+  NORMAL
+  VIP
+}
+
 model Cooperative {
-  id        Int       @id @default(autoincrement()) @map("id_cooperativa")
-  name      String    @map("nombre")
-  address   String    @map("direccion")
-  phone     String    @map("telefono")
-  email     String
-  logo      String
-  buses     Bus[]
-  routes    Route[]
-  users     User[]
-  isDeleted Boolean   @default(false)
+  id          Int         @id @default(autoincrement()) @map("id")
+  name        String      @map("nombre")
+  address     String      @map("direccion")
+  phone       String      @map("telefono")
+  email       String
+  logo        String
+  facebook    String?     @map("facebook")
+  instagram   String?     @map("instagram")
+  twitter     String?     @map("twitter")
+  website     String?     @map("pagina_web")
+  buses       Bus[]
+  frequencies Frequency[]
+  users       User[]
+  isDeleted   Boolean     @default(false)
 
   @@map("cooperativas")
 }
 
 model Bus {
-  id               Int        @id @default(autoincrement()) @map("id_bus")
-  cooperativeId    Int        @map("id_cooperativa")
-  licensePlate     String     @map("placa")
-  chassisBrand     String     @map("marca_chasis")
-  bodyworkBrand    String     @map("marca_carroceria")
-  photos           String[]   @map("fotografias") // Array de URLs de fotos
-  capacity         Int        @map("capacidad")
-  stoppageDays     Int        @map("dias_parada")
-  floorCount       Int        @default(1) @map("numero_pisos") // Número de pisos del bus
-  cooperative      Cooperative @relation(fields: [cooperativeId], references: [id])
-  seats            BusSeat[]
-  routeSheets      RouteSheet[]
-  isDeleted        Boolean    @default(false)
+  id            Int                @id @default(autoincrement()) @map("id")
+  cooperativeId Int                @map("id_cooperativa")
+  licensePlate  String             @map("placa")
+  chassisBrand  String             @map("marca_chasis")
+  bodyworkBrand String             @map("marca_carroceria")
+  photo         String?            @map("fotografia")
+  stoppageDays  Int                @default(2) @map("dias_parada")
+  busTypeId     Int                @map("id_tipo_bus")
+  cooperative   Cooperative        @relation(fields: [cooperativeId], references: [id])
+  seats         BusSeat[]
+  routeSheets   RouteSheetDetail[]
+  busType       BusType            @relation(fields: [busTypeId], references: [id])
+  isDeleted     Boolean            @default(false)
 
   @@map("buses")
 }
 
+model BusType {
+  id         Int     @id @default(autoincrement()) @map("id")
+  name       String  @map("nombre")
+  floorCount Int     @default(1) @map("numero_pisos") // Número de pisos del bus
+  capacity   Int     @default(0) @map("capacidad")
+  isDeleted  Boolean @default(false)
+  Bus        Bus[]
+
+  @@map("tipos_bus")
+}
+
 model BusSeat {
-  id          Int       @id @default(autoincrement()) @map("id_asiento")
-  busId       Int       @map("id_bus")
-  number      String    @map("numero")
-  type        String    @map("tipo") // normal/VIP/discapacitado
-  location    String    @map("ubicacion") // pasillo/ventana
-  bus         Bus       @relation(fields: [busId], references: [id])
-  tickets     Ticket[]
-  isDeleted   Boolean   @default(false)
-
-  @@map("asientos_bus")
-}
-
-model Route {
-  id              Int               @id @default(autoincrement()) @map("id_frecuencia")
-  cooperativeId   Int               @map("id_cooperativa")
-  originCity      String            @map("ciudad_origen")
-  destinationCity String            @map("ciudad_destino")
-  departureTime   DateTime          @map("hora_salida") @db.Time()
-  status          String            @map("estado")
-  antResolution   String            @map("resolucion_ANT")
-  cooperative     Cooperative       @relation(fields: [cooperativeId], references: [id])
-  intermediateStops IntermediateStop[]
-  routeSheets     RouteSheet[]
-  isDeleted       Boolean           @default(false)
-
-  @@map("frecuencias")
-}
-
-model IntermediateStop {
-  id          Int     @id @default(autoincrement()) @map("id_parada")
-  routeId     Int     @map("id_frecuencia")
-  city        String  @map("ciudad")
-  order       Int     @map("orden")
-  route       Route   @relation(fields: [routeId], references: [id])
-  isDeleted   Boolean @default(false)
-
-  @@map("paradas_intermedias")
-}
-
-model RouteSheet {
-  id        Int      @id @default(autoincrement()) @map("id_hoja_ruta")
-  routeId   Int      @map("id_frecuencia")
+  id        Int      @id @default(autoincrement()) @map("id")
   busId     Int      @map("id_bus")
-  date      DateTime @map("fecha") @db.Date
-  status    String   @map("estado")
-  route     Route    @relation(fields: [routeId], references: [id])
+  number    String   @map("numero")
+  type      SeatType @map("tipo") // normal/VIP
+  location  String   @map("ubicacion") // pasillo/ventana
   bus       Bus      @relation(fields: [busId], references: [id])
   tickets   Ticket[]
   isDeleted Boolean  @default(false)
 
+  @@map("asientos_bus")
+}
+
+model Frequency {
+  id                Int                @id @default(autoincrement()) @map("id")
+  cooperativeId     Int                @map("id_cooperativa")
+  originCityId      Int                @map("id_ciudad_origen")
+  destinationCityId Int                @map("id_ciudad_destino")
+  departureTime     DateTime           @map("hora_salida") @db.Time()
+  status            String             @map("estado")
+  antResolution     String             @map("resolucion_ANT")
+  cooperative       Cooperative        @relation(fields: [cooperativeId], references: [id])
+  originCity        City               @relation(fields: [originCityId], references: [id], name: "originCity")
+  destinationCity   City               @relation(fields: [destinationCityId], references: [id], name: "destinationCity")
+  intermediateStops IntermediateStop[]
+  routeSheets       RouteSheetDetail[]
+  routePrice        RoutePrice?
+  isDeleted         Boolean            @default(false)
+
+  @@map("frecuencias")
+}
+
+model City {
+  id                     Int                @id @default(autoincrement()) @map("id")
+  name                   String             @unique @map("nombre")
+  province               Province           @map("provincia")
+  isDeleted              Boolean            @default(false)
+  originFrequencies      Frequency[]        @relation("originCity")
+  destinationFrequencies Frequency[]        @relation("destinationCity")
+  intermediateStops      IntermediateStop[]
+  originTicket           Ticket[]           @relation("originStop")
+  destinationTicket      Ticket[]           @relation("destinationStop")
+
+  @@map("ciudades")
+}
+
+model IntermediateStop {
+  id          Int       @id @default(autoincrement()) @map("id")
+  frequencyId Int       @map("id_frecuencia")
+  cityId      Int       @map("id_ciudad")
+  order       Int       @map("orden")
+  frequency   Frequency @relation(fields: [frequencyId], references: [id])
+  city        City      @relation(fields: [cityId], references: [id])
+  isDeleted   Boolean   @default(false)
+
+  @@map("paradas_intermedias")
+}
+
+model RouteSheetHeader {
+  id                Int                @id @default(autoincrement()) @map("id")
+  cooperativeId     Int                @map("id_cooperativa")
+  startDate         DateTime           @map("fecha_inicio")
+  endDate           DateTime           @map("fecha_fin")
+  status            String             @map("estado")
+  isDeleted         Boolean            @default(false)
+  routeSheetDetails RouteSheetDetail[]
+
   @@map("hojas_ruta")
 }
 
-model Role {
-  id          Int         @id @default(autoincrement()) @map("id_rol")
-  name        String      @map("nombre") // cliente/oficinista/chofer/admin_coop
-  description String      @map("descripcion")
-  users       User[]
+model RouteSheetDetail {
+  id                   Int               @id @default(autoincrement()) @map("id")
+  routeSheetHeaderId   Int?              @map("id_hoja_ruta")
+  frequencyId          Int               @map("id_frecuencia")
+  busId                Int               @map("id_bus")
+  availableNormalSeats Int               @map("asientos_disponibles")
+  availableVIPSeats    Int               @map("asientos_disponibles_vip")
+  totalNormalSeats     Int               @map("asientos_total")
+  totalVIPSeats        Int               @map("asientos_total_vip")
+  normalSeatsTickets   Int               @default(0) @map("boletos_asientos")
+  vipSeatsTickets      Int               @default(0) @map("boletos_asientos_vip")
+  date                 DateTime          @map("fecha") @db.Date
+  status               String            @map("estado")
+  isDeleted            Boolean           @default(false)
+  routeSheetHeader     RouteSheetHeader? @relation(fields: [routeSheetHeaderId], references: [id])
+  bus                  Bus               @relation(fields: [busId], references: [id])
+  frequency            Frequency         @relation(fields: [frequencyId], references: [id])
+  ticket               Ticket[]
 
-  @@map("roles")
+  @@map("hoja_ruta_detalles")
+}
+
+model RoutePrice {
+  id            Int         @id @default(autoincrement())
+  frequencyId   Int         @unique @map("id_frecuencia")
+  normalPrice   Decimal     @map("precio_normal") @db.Decimal(10, 2)
+  vipPrice      Decimal     @map("precio_vip") @db.Decimal(10, 2)
+  childDiscount Decimal     @default(50) @map("descuento_nino") @db.Decimal(5, 2) // Porcentaje
+  seniorDiscount Decimal    @default(25) @map("descuento_tercera_edad") @db.Decimal(5, 2)
+  handicappedDiscount Decimal @default(50) @map("descuento_discapacitado") @db.Decimal(5, 2)
+  frequency     Frequency   @relation(fields: [frequencyId], references: [id])
+  isDeleted     Boolean     @default(false)
+
+  @@map("precios_ruta")
 }
 
 model User {
-  id              Int               @id @default(autoincrement()) @map("id_usuario")
-  idNumber        String            @map("cedula")
-  documentType    String            @map("tipo_documento") // cedula/pasaporte
-  firstName       String            @map("nombres")
-  lastName        String            @map("apellidos")
-  email           String
-  phone           String            @map("telefono")
-  password        String
-  roleId          Int               @map("id_rol")
-  cooperativeId   Int?              @map("id_cooperativa")
-  cooperative     Cooperative?      @relation(fields: [cooperativeId], references: [id])
-  role            Role              @relation(fields: [roleId], references: [id])
-  userHistory     UserHistory?
-  tickets         Ticket[]
-  isDeleted       Boolean           @default(false)
+  id            Int          @id @default(autoincrement()) @map("id")
+  idNumber      String       @map("cedula")
+  documentType  String       @map("tipo_documento") // cedula/pasaporte
+  firstName     String       @map("nombres")
+  lastName      String       @map("apellidos")
+  email         String
+  phone         String       @map("telefono")
+  password      String
+  role          Role         @default(CLIENT) @map("rol")
+  cooperativeId Int?         @map("id_cooperativa")
+  cooperative   Cooperative? @relation(fields: [cooperativeId], references: [id])
+
+  tickets     Ticket[]
+  isDeleted   Boolean      @default(false)
 
   @@map("usuarios")
 }
 
-model UserHistory {
-  id            Int       @id @default(autoincrement()) @map("id_historial")
-  userId        Int       @unique @map("id_usuario")
-  totalPurchases Int       @map("total_compras")
-  lastPurchase  DateTime  @map("ultima_compra")
-  user          User      @relation(fields: [userId], references: [id])
-  isDeleted     Boolean   @default(false)
-
-  @@map("historial_usuario")
-}
-
 model Ticket {
-  id              Int         @id @default(autoincrement()) @map("id_boleto")
-  userId          Int         @map("id_usuario")
-  routeSheetId    Int         @map("id_hoja_ruta")
-  seatId          Int         @map("id_asiento")
-  purchaseDate    DateTime    @map("fecha_compra")
-  passengerType   String      @map("tipo_pasajero") // normal/menor/discapacitado/tercera_edad
-  price           Decimal     @map("precio") @db.Decimal(10, 2)
-  discount        Decimal     @map("descuento") @db.Decimal(10, 2)
-  status          String      @map("estado")
-  qrCode          String      @map("codigo_qr")
-  originStop      String      @map("parada_origen")
-  destinationStop String      @map("parada_destino")
-  user            User        @relation(fields: [userId], references: [id])
-  routeSheet      RouteSheet  @relation(fields: [routeSheetId], references: [id])
-  seat            BusSeat     @relation(fields: [seatId], references: [id])
-  payments        Payment[]
-  isDeleted       Boolean     @default(false)
+  id                Int              @id @default(autoincrement()) @map("id")
+  userId            Int              @map("id_usuario")
+  routeSheetId      Int              @map("id_hoja_ruta")
+  seatId            Int              @map("id_asiento")
+  seatType          SeatType         @map("tipo_asiento")
+  purchaseDate      DateTime         @map("fecha_compra")
+  passengerType     PassengerType    @map("tipo_pasajero")
+  price             Decimal          @map("precio") @db.Decimal(10, 2)
+  discount          Decimal          @map("descuento") @db.Decimal(10, 2)
+  status            String           @map("estado")
+  originStopId      Int              @map("parada_origen")
+  destinationStopId Int              @map("parada_destino")
+  paymentId         Int              @map("id_pago")
+  user              User             @relation(fields: [userId], references: [id])
+  routeSheet        RouteSheetDetail @relation(fields: [routeSheetId], references: [id])
+  seat              BusSeat          @relation(fields: [seatId], references: [id])
+  originStop        City             @relation(fields: [originStopId], references: [id], name: "originStop")
+  destinationStop   City             @relation(fields: [destinationStopId], references: [id], name: "destinationStop")
+  isDeleted         Boolean          @default(false)
+  payment           Payment          @relation(fields: [paymentId], references: [id])
 
   @@map("boletos")
 }
 
 model Payment {
-  id          Int       @id @default(autoincrement()) @map("id_pago")
-  ticketId    Int       @map("id_boleto")
-  method      String    @map("metodo") // transferencia/PayPal/tarjeta
-  amount      Decimal   @map("monto") @db.Decimal(10, 2)
-  status      String    @map("estado")
-  receipt     String    @map("comprobante")
-  date        DateTime  @map("fecha")
-  ticket      Ticket    @relation(fields: [ticketId], references: [id])
-  isDeleted   Boolean   @default(false)
+  id        Int      @id @default(autoincrement()) @map("id")
+  method    String   @default("Stripe") @map("metodo") // Stripe
+  amount    Decimal  @default(0) @map("monto") @db.Decimal(10, 2)
+  status    String   @map("estado")
+  date      DateTime @map("fecha")
+  isDeleted Boolean  @default(false)
+  tickets   Ticket[]
 
   @@map("pagos")
 }

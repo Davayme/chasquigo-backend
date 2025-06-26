@@ -39,20 +39,10 @@ export class CreateBusDto {
 
   @ApiProperty({ 
     description: 'URLs de las fotografías del bus',
-    example: ['https://ejemplo.com/foto1.jpg', 'https://ejemplo.com/foto2.jpg']
+    example: 'https://ejemplo.com/foto1.jpg'
   })
-  @IsArray()
-  @IsString({ each: true })
-  photos: string[];
-
-  @ApiProperty({ 
-    description: 'Capacidad total de pasajeros',
-    example: 40,
-    minimum: 1
-  })
-  @IsInt()
-  @Min(1)
-  capacity: number;
+  @IsString()
+  photo: string;
 
   @ApiProperty({ 
     description: 'Días de parada (descanso)',
@@ -66,13 +56,12 @@ export class CreateBusDto {
   stoppageDays?: number;
 
   @ApiProperty({ 
-    description: 'Número de pisos del bus',
-    example: 1,
-    minimum: 1
+    description: 'ID del tipo de bus',
+    example: 1
   })
   @IsInt()
-  @Min(1)
-  floorCount: number;
+  @IsNotEmpty()
+  busTypeId: number;
 
   @ApiProperty({ 
     description: 'Lista de asientos del bus',

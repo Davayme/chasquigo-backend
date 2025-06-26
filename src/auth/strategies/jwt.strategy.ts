@@ -17,9 +17,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // Buscar el usuario en la base de datos
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      include: { 
-        role: true,
-      },
     });
 
     if (!user || user.isDeleted) {
