@@ -40,6 +40,7 @@ enum Role {
   ADMIN
   CLIENT
   DRIVER
+  WORKER
 }
 
 enum DocumentType {
@@ -66,6 +67,10 @@ model Cooperative {
   phone       String      @map("telefono")
   email       String
   logo        String
+  facebook    String?     @map("facebook")
+  instagram   String?     @map("instagram")
+  twitter     String?     @map("twitter")
+  website     String?     @map("pagina_web")
   buses       Bus[]
   frequencies Frequency[]
   users       User[]
@@ -129,6 +134,7 @@ model Frequency {
   destinationCity   City               @relation(fields: [destinationCityId], references: [id], name: "destinationCity")
   intermediateStops IntermediateStop[]
   routeSheets       RouteSheetDetail[]
+  routePrice        RoutePrice?
   isDeleted         Boolean            @default(false)
 
   @@map("frecuencias")
@@ -192,6 +198,20 @@ model RouteSheetDetail {
   ticket               Ticket[]
 
   @@map("hoja_ruta_detalles")
+}
+
+model RoutePrice {
+  id            Int         @id @default(autoincrement())
+  frequencyId   Int         @unique @map("id_frecuencia")
+  normalPrice   Decimal     @map("precio_normal") @db.Decimal(10, 2)
+  vipPrice      Decimal     @map("precio_vip") @db.Decimal(10, 2)
+  childDiscount Decimal     @default(50) @map("descuento_nino") @db.Decimal(5, 2) // Porcentaje
+  seniorDiscount Decimal    @default(25) @map("descuento_tercera_edad") @db.Decimal(5, 2)
+  handicappedDiscount Decimal @default(50) @map("descuento_discapacitado") @db.Decimal(5, 2)
+  frequency     Frequency   @relation(fields: [frequencyId], references: [id])
+  isDeleted     Boolean     @default(false)
+
+  @@map("precios_ruta")
 }
 
 model User {
