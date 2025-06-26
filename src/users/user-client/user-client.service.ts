@@ -3,6 +3,7 @@ import { PrismaService } from "src/prisma/prisma.service";
 import { CreateUserDto } from "../dtos/req/create-user.dto";
 import * as bcrypt from 'bcrypt';
 import { PrismaErrorHandler } from "src/common/filters/prisma-errors";
+import { Role } from "@prisma/client";
 
 @Injectable()
 export class UserClientService {
@@ -36,7 +37,7 @@ export class UserClientService {
       }
 
       // ID de rol de cliente predefinido
-      const adminRoleId = 3;
+      const adminRoleId = Role.CLIENT;
 
       // Encriptar la contraseña
       const hashedPassword = await bcrypt.hash(createAdminUserDto.password, 10);
@@ -51,22 +52,17 @@ export class UserClientService {
           email: createAdminUserDto.email,
           phone: createAdminUserDto.phone,
           password: hashedPassword,
-          roleId: adminRoleId,
+          role: adminRoleId,
           isDeleted: false
-        },
-        select: {
+          },
+          select: {
           id: true,
           idNumber: true,
           firstName: true,
           lastName: true,
           email: true,
           phone: true,
-          role: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
+          role: true,
           cooperativeId: true
         }
       });

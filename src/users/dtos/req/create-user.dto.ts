@@ -1,10 +1,7 @@
 import { IsEmail, IsEnum, IsNotEmpty, IsString, Length, Matches } from 'class-validator';
+import { DocumentType } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 
-export enum DocumentType {
-  CEDULA = 'cedula',
-  PASAPORTE = 'pasaporte'
-}
 
 export class CreateUserDto {
   @ApiProperty({ example: '1234567890' })
