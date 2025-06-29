@@ -88,16 +88,42 @@ export class TicketsController {
   @ApiResponse({ status: 400, description: 'Webhook inválido o pago fallido' })
   async confirmStripePayment(
     @Headers('stripe-signature') signature: string,
-    @RawBody() payload: Buffer
+    @Req() request: any // ✅ Usar request completo
   ) {
     try {
+      console.log('🔗 Webhook recibido:', {
+        hasSignature: !!signature,
+        hasBody: !!request.rawBody || !!request.body,
+        bodyType: typeof (request.rawBody || request.body),
+        contentType: request.headers['content-type']
+      });
+
       const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
       const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+      // ✅ Usar rawBody si está disponible, sino usar body
+      const payload = request.rawBody || request.body;
+
+      if (!payload) {
+        console.error('❌ No payload found in request');
+        throw new BadRequestException('No webhook payload provided');
+      }
+
       const event = stripe.webhooks.constructEvent(payload, signature, endpointSecret);
 
-      console.log(`🔗 Webhook Stripe recibido: ${event.type}`);
+      console.log(`🔗 Webhook Stripe recibido: ${event.type}, ID: ${event.id}`);
+
+      const result = await this.ticketsService.handleStripeWebhook(event);
       
-      return await this.ticketsService.handleStripeWebhook(event);
+      // Log adicional del resultado
+      if (result.processed) {
+        const transactionId = 'transactionId' in result ? result.transactionId : 'unknown';
+        console.log(`✅ Webhook procesado exitosamente: ${event.type} - TransactionID: ${transactionId}`);
+      } else {
+        console.log(`ℹ️ Webhook recibido pero no procesado: ${event.type} - Razón: ${result.reason}`);
+      }
+
+      return result;
     } catch (error) {
       console.error('❌ Error processing Stripe webhook:', error);
       throw new BadRequestException('Invalid webhook');

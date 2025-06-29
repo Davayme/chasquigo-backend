@@ -498,15 +498,6 @@ export class TicketsService {
         { purchaseTransactionId: result.purchaseTransaction.id.toString() } // ✅ Metadata para webhook
       );
 
-      // 6. ✅ Agregar metadata a la transacción para linking con Stripe
-      await this.prisma.purchaseTransaction.update({
-        where: { id: result.purchaseTransaction.id },
-        data: {
-          // Podemos agregar el PaymentIntent ID como referencia
-          status: `pending_stripe_${stripeKeys.paymentIntent}`,
-        },
-      });
-
       // 7. Preparar respuesta
       const response = {
         transaction: {
@@ -582,8 +573,38 @@ export class TicketsService {
           throw new NotFoundException('Transacción no encontrada');
         }
 
-        if (purchaseTransaction.status !== 'pending') {
-          throw new BadRequestException('La transacción ya fue procesada');
+        // ✅ MEJORADO: Aceptar 'pending' o cualquier estado que comience con 'pending_'
+        const isPending = purchaseTransaction.status === 'pending' || purchaseTransaction.status.startsWith('pending_');
+        
+        if (!isPending) {
+          // ✅ IDEMPOTENCIA: Si ya está completada, devolver información existente sin error
+          if (purchaseTransaction.status === 'completed') {
+            console.log(`⚠️ Transacción ya completada, devolviendo información existente: ${purchaseTransactionId}`);
+            
+            // Obtener información del pago existente
+            const existingPayment = await tx.payment.findFirst({
+              where: { 
+                OR: [
+                  { stripePaymentId: stripePaymentIntentId },
+                  { 
+                    AND: [
+                      { method: 'Stripe' },
+                      { amount: purchaseTransaction.finalAmount }
+                    ]
+                  }
+                ]
+              }
+            });
+
+            return {
+              purchaseTransaction,
+              ticket: purchaseTransaction.tickets[0],
+              payment: existingPayment,
+              wasAlreadyProcessed: true
+            };
+          }
+          
+          throw new BadRequestException(`La transacción está en estado: ${purchaseTransaction.status}`);
         }
 
         // Crear registro de pago
@@ -606,24 +627,42 @@ export class TicketsService {
           },
         });
 
-        // Actualizar estado del ticket
+        // Actualizar estado del ticket y generar QR code
         const ticket = purchaseTransaction.tickets[0];
-        await tx.ticket.update({
+        
+        // ✅ AGREGAR: Generar QR code si no existe
+        let qrCode = ticket.qrCode;
+        if (!qrCode) {
+          qrCode = this.generateUniqueQR(ticket.id);
+        }
+
+        const updatedTicket = await tx.ticket.update({
           where: { id: ticket.id },
-          data: { status: TicketStatus.CONFIRMED },
+          data: { 
+            status: TicketStatus.CONFIRMED,
+            qrCode: qrCode
+          },
         });
+
+        console.log(`✅ Ticket confirmado: ${ticket.id}, QR: ${qrCode}, Estado: ${TicketStatus.CONFIRMED}`);
 
         // ✅ ELIMINAR: updateSeatAvailability ya que no existe availableNormalSeats/availableVIPSeats en el nuevo esquema
 
         return {
           purchaseTransaction: { ...purchaseTransaction, status: 'completed' },
-          ticket: { ...ticket, status: TicketStatus.CONFIRMED },
+          ticket: { ...updatedTicket, qrCode },
           payment,
         };
       });
 
       // ✅ CORREGIDO: Obtener información de la ruta desde la frecuencia directamente
       const ticket = result.purchaseTransaction.tickets[0];
+      
+      // Si ya fue procesada, usar el PaymentIntent del pago existente
+      const effectivePaymentIntentId = result.wasAlreadyProcessed && result.payment?.stripePaymentId 
+        ? result.payment.stripePaymentId 
+        : stripePaymentIntentId;
+
       const frequency = await this.prisma.frequency.findUnique({
         where: { id: ticket.frequencyId },
         include: {
@@ -667,11 +706,16 @@ export class TicketsService {
         payment: {
           method: 'Stripe',
           status: 'completed',
-          stripePaymentIntentId,
+          stripePaymentIntentId: effectivePaymentIntentId,
         },
       };
 
-      console.log(`✅ Compra confirmada exitosamente con Stripe: ${ticket.id}`);
+      // Mensaje diferente si ya fue procesada
+      if (result.wasAlreadyProcessed) {
+        console.log(`✅ Compra ya confirmada anteriormente con Stripe: ${ticket.id} (idempotencia)`);
+      } else {
+        console.log(`✅ Compra confirmada exitosamente con Stripe: ${ticket.id}`);
+      }
       return response;
 
     } catch (error) {
@@ -969,40 +1013,142 @@ export class TicketsService {
   }
 
   /**
-   * 🔗 MANEJAR WEBHOOK DE STRIPE
+   * 🔗 MANEJAR WEBHOOK DE STRIPE (con idempotencia)
    */
   async handleStripeWebhook(event: any) {
     try {
-      console.log(`🔗 Procesando webhook de Stripe: ${event.type}`);
+      console.log(`🔗 Procesando webhook de Stripe: ${event.type}, ID: ${event.id}`);
+
+      // Lista de eventos que debemos procesar
+      const relevantEvents = [
+        'payment_intent.succeeded',
+        'payment_intent.payment_failed',
+        'payment_intent.canceled'
+      ];
+
+      // Ignorar eventos no relevantes para nuestro flujo
+      if (!relevantEvents.includes(event.type)) {
+        console.log(`ℹ️ Evento ignorado (no relevante): ${event.type}`);
+        return { received: true, processed: false, reason: 'event_not_relevant' };
+      }
 
       switch (event.type) {
         case 'payment_intent.succeeded':
-          const paymentIntent = event.data.object;
-          const purchaseTransactionId = parseInt(paymentIntent.metadata.purchaseTransactionId);
-          
-          if (purchaseTransactionId) {
-            await this.confirmPurchaseStripe(purchaseTransactionId, paymentIntent.id);
-            console.log(`✅ Pago exitoso procesado para transacción: ${purchaseTransactionId}`);
-          }
-          break;
+          return await this.handlePaymentSucceeded(event);
 
         case 'payment_intent.payment_failed':
-          const failedPayment = event.data.object;
-          const failedTransactionId = parseInt(failedPayment.metadata.purchaseTransactionId);
-          
-          if (failedTransactionId) {
-            await this.cancelPurchase(failedTransactionId, 'Pago fallido en Stripe');
-            console.log(`❌ Pago fallido procesado para transacción: ${failedTransactionId}`);
-          }
-          break;
+        case 'payment_intent.canceled':
+          return await this.handlePaymentFailed(event);
 
         default:
-          console.log(`ℹ️ Evento no manejado: ${event.type}`);
+          console.log(`⚠️ Evento relevante pero no implementado: ${event.type}`);
+          return { received: true, processed: false, reason: 'not_implemented' };
       }
 
-      return { received: true };
     } catch (error) {
       console.error('❌ Error handling Stripe webhook:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * ✅ MANEJAR PAGO EXITOSO (con idempotencia)
+   */
+  private async handlePaymentSucceeded(event: any) {
+    const paymentIntent = event.data.object;
+    const purchaseTransactionId = parseInt(paymentIntent.metadata.purchaseTransactionId);
+    
+    if (!purchaseTransactionId) {
+      console.log(`⚠️ PaymentIntent sin purchaseTransactionId en metadata: ${paymentIntent.id}`);
+      return { received: true, processed: false, reason: 'no_transaction_id' };
+    }
+
+    try {
+      // Verificar estado actual de la transacción (idempotencia)
+      const existingTransaction = await this.prisma.purchaseTransaction.findUnique({
+        where: { id: purchaseTransactionId },
+        select: { status: true, id: true }
+      });
+
+      if (!existingTransaction) {
+        console.log(`❌ Transacción no encontrada: ${purchaseTransactionId}`);
+        return { received: true, processed: false, reason: 'transaction_not_found' };
+      }
+
+      // ✅ IDEMPOTENCIA: Si ya está procesada, devolver éxito sin procesar de nuevo
+      if (existingTransaction.status === 'completed') {
+        console.log(`✅ Transacción ya procesada (idempotencia): ${purchaseTransactionId}`);
+        return { received: true, processed: false, reason: 'already_processed' };
+      }
+
+      if (existingTransaction.status === 'cancelled') {
+        console.log(`⚠️ Intento de procesar transacción ya cancelada: ${purchaseTransactionId}`);
+        return { received: true, processed: false, reason: 'transaction_cancelled' };
+      }
+
+      // Procesar el pago
+      await this.confirmPurchaseStripe(purchaseTransactionId, paymentIntent.id);
+      console.log(`✅ Pago exitoso procesado para transacción: ${purchaseTransactionId}`);
+      
+      return { received: true, processed: true, transactionId: purchaseTransactionId };
+
+    } catch (error) {
+      console.error(`❌ Error procesando pago exitoso para transacción ${purchaseTransactionId}:`, error);
+      
+      // Si es un error de "ya procesada", devolver éxito
+      if (error.message?.includes('ya fue procesada')) {
+        console.log(`✅ Transacción ya procesada (capturada en error): ${purchaseTransactionId}`);
+        return { received: true, processed: false, reason: 'already_processed' };
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * ❌ MANEJAR PAGO FALLIDO (con idempotencia)
+   */
+  private async handlePaymentFailed(event: any) {
+    const paymentIntent = event.data.object;
+    const purchaseTransactionId = parseInt(paymentIntent.metadata.purchaseTransactionId);
+    
+    if (!purchaseTransactionId) {
+      console.log(`⚠️ PaymentIntent fallido sin purchaseTransactionId en metadata: ${paymentIntent.id}`);
+      return { received: true, processed: false, reason: 'no_transaction_id' };
+    }
+
+    try {
+      // Verificar estado actual de la transacción (idempotencia)
+      const existingTransaction = await this.prisma.purchaseTransaction.findUnique({
+        where: { id: purchaseTransactionId },
+        select: { status: true, id: true }
+      });
+
+      if (!existingTransaction) {
+        console.log(`❌ Transacción no encontrada para cancelar: ${purchaseTransactionId}`);
+        return { received: true, processed: false, reason: 'transaction_not_found' };
+      }
+
+      // ✅ IDEMPOTENCIA: Si ya está cancelada o completada, no procesar de nuevo
+      if (existingTransaction.status === 'cancelled') {
+        console.log(`✅ Transacción ya cancelada (idempotencia): ${purchaseTransactionId}`);
+        return { received: true, processed: false, reason: 'already_cancelled' };
+      }
+
+      if (existingTransaction.status === 'completed') {
+        console.log(`⚠️ Intento de cancelar transacción ya completada: ${purchaseTransactionId}`);
+        return { received: true, processed: false, reason: 'transaction_completed' };
+      }
+
+      // Cancelar la transacción
+      const reason = `Pago fallido/cancelado en Stripe (${event.type})`;
+      await this.cancelPurchase(purchaseTransactionId, reason);
+      console.log(`❌ Pago fallido procesado para transacción: ${purchaseTransactionId}`);
+      
+      return { received: true, processed: true, transactionId: purchaseTransactionId };
+
+    } catch (error) {
+      console.error(`❌ Error procesando pago fallido para transacción ${purchaseTransactionId}:`, error);
       throw error;
     }
   }
