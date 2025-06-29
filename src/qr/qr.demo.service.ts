@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+/* import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import * as QRCode from 'qrcode';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -34,11 +34,6 @@ export class QrDemoService {
         }
     }
 
-    /**
-     * Genera un QR como un buffer PNG
-     * @param data Datos para codificar en el QR
-     * @returns Buffer con la imagen PNG
-     */
     async generateQRBuffer(data: string): Promise<Buffer> {
         try {
             const buffer = await QRCode.toBuffer(data, {
@@ -54,12 +49,6 @@ export class QrDemoService {
             throw new Error(`Error al generar buffer QR: ${error.message}`);
         }
     }
-    /**
-   * Genera un QR de prueba con datos estáticos (no requiere datos en la BD)
-   * @param demoId ID demo para uso en pruebas (1-3 para diferentes escenarios)
-   * @param format Formato deseado del QR (base64 o png)
-   * @returns QR como string base64 o como buffer PNG
-   */
     async getDemoTicketQR(demoId: number = 1, format: 'base64' | 'png' = 'base64'): Promise<string | Buffer> {
         // Crear datos estáticos en función del demoId
         const demoData = this.createDemoTicketData(demoId);
@@ -92,11 +81,7 @@ export class QrDemoService {
         }
     }
 
-    /**
-     * Crea datos demo para un boleto ficticio
-     * @param demoId ID del escenario demo (1-3)
-     * @returns Objeto con datos de boleto para test
-     */
+
     private createDemoTicketData(demoId: number): any {
         // Definir algunos escenarios de datos demo
         const demoScenarios = [
@@ -149,11 +134,7 @@ export class QrDemoService {
         return demoScenarios[idx];
     }
 
-    /**
-     * Genera un hash para datos de billete demo
-     * @param demoData Datos demo del boleto
-     * @returns Hash HMAC-SHA256
-     */
+
     private generateDemoTicketHash(demoData: any): string {
         const secret = process.env.QR_SECRET || 'chasquigo-demo-secret-key';
         return crypto
@@ -162,12 +143,7 @@ export class QrDemoService {
             .digest('hex');
     }
 
-    /**
-     * Valida un boleto escaneado usando su ID y hash
-     * @param ticketId ID del boleto
-     * @param hash Hash de validación del QR
-     * @returns Objeto con información de validación
-     */
+
     async validateTicket(ticketId: number, hash: string): Promise<{
         isValid: boolean;
         ticketId: number;
@@ -227,12 +203,7 @@ export class QrDemoService {
         }
     }
 
-    /**
-     * Valida un boleto demo (siempre devuelve resultado positivo)
-     * @param demoId ID del boleto demo
-     * @param hash Hash de validación
-     * @returns Objeto con información de validación
-     */
+
     validateDemoTicket(demoId: number, hash: string): {
         isValid: boolean;
         ticketId: number;
@@ -257,11 +228,7 @@ export class QrDemoService {
         };
     }
 
-    /**
-     * Genera un hash seguro para un boleto
-     * @param ticket Objeto del boleto
-     * @returns Hash HMAC-SHA256
-     */
+
     private generateTicketHash(ticket: any): string {
         const secret = process.env.QR_SECRET || 'chasquigo-secret-key';
         return crypto
@@ -269,4 +236,4 @@ export class QrDemoService {
             .update(`${ticket.id}-${ticket.userId}-${ticket.seatId}-${ticket.purchaseDate.toISOString()}`)
             .digest('hex');
     }
-}
+} */

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe } from '@nestjs/common';
+/* import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/req/create-payment.dto';
 import { UpdatePaymentDto } from './dto/req/update-payment.dto';
@@ -56,3 +56,4 @@ export class PaymentsController {
     return this.paymentsService.remove(id);
   }
 }
+ */

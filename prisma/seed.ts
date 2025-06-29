@@ -1,49 +1,231 @@
 import { Logger } from '@nestjs/common';
-import { PrismaClient, Province, Role, DocumentType } from '@prisma/client';
+import {
+  PrismaClient,
+  Province,
+  Role,
+  DocumentType,
+  SeatType,
+  SeatLocation,
+  Status,
+  TicketStatus,
+  PassengerType,
+} from '@prisma/client';
 import { hash } from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+// Función para generar asientos de bus
+function generateBusSeats(
+  floor: number,
+  rows: number,
+  rows2: number = 0,
+  seatsPerRow: number,
+  startNumber: number = 1,
+) {
+  const seats = [];
+
+  for (let row = 1; row <= rows; row++) {
+    for (let seat = 0; seat < seatsPerRow; seat++) {
+      const seatNumber = startNumber + (row - 1) * seatsPerRow + seat;
+
+      seats.push({
+        floor: 1,
+        number: seatNumber,
+        type: [SeatType.VIP, SeatType.NORMAL][Math.floor(Math.random() * 2)],
+        location:
+          seat === 0
+            ? SeatLocation.WINDOW_LEFT
+            : seat === seatsPerRow - 1
+              ? SeatLocation.WINDOW_RIGHT
+              : seat === seatsPerRow / 2
+                ? SeatLocation.AISLE_LEFT
+                : seat === seatsPerRow / 2 - 1
+                  ? SeatLocation.AISLE_RIGHT
+                  : SeatLocation.MIDDLE,
+        status: Status.ACTIVE,
+      });
+    }
+
+    if (floor === 1 && row === rows) {
+      const seatNumber = startNumber + (row - 1) * seatsPerRow + seatsPerRow;
+      seats.push({
+        floor,
+        number: seatNumber,
+        type: SeatType.NORMAL,
+        location: SeatLocation.MIDDLE,
+        status: Status.ACTIVE,
+      });
+    }
+  }
+
+  for (let row = 1; row <= rows2; row++) {
+    for (let seat = 0; seat < seatsPerRow; seat++) {
+      const seatNumber = startNumber + (row - 1) * seatsPerRow + seat;
+
+      seats.push({
+        floor: 2,
+        number: seatNumber,
+        type: [SeatType.VIP, SeatType.NORMAL][Math.floor(Math.random() * 2)],
+        location:
+          seat === 0
+            ? SeatLocation.WINDOW_LEFT
+            : seat === seatsPerRow - 1
+              ? SeatLocation.WINDOW_RIGHT
+              : seat === seatsPerRow / 2
+                ? SeatLocation.AISLE_LEFT
+                : seat === (seatsPerRow / 2) - 1
+                  ? SeatLocation.AISLE_RIGHT
+                  : SeatLocation.MIDDLE,
+        status: Status.ACTIVE,
+      });
+    }
+  }
+
+  return seats;
+}
+
 async function main() {
   // Limpiar datos existentes (ten cuidado en producción)
-  Logger.log('Limpiando datos existentes...');
-  await prisma.intermediateStop.deleteMany({});
+  Logger.log('🧹 Limpiando datos existentes...');
+  await prisma.ticketPassenger.deleteMany({});
+  await prisma.payment.deleteMany({});
+  await prisma.purchaseTransaction.deleteMany({});
   await prisma.ticket.deleteMany({});
   await prisma.routeSheetDetail.deleteMany({});
   await prisma.routeSheetHeader.deleteMany({});
+  await prisma.routePrice.deleteMany({});
+  await prisma.intermediateStop.deleteMany({});
   await prisma.frequency.deleteMany({});
   await prisma.busSeat.deleteMany({});
-  await prisma.bus.deleteMany({});
+  await prisma.bus.deleteMany({}); // Eliminar buses ANTES que busType
+  await prisma.busType.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.cooperative.deleteMany({});
   await prisma.city.deleteMany({});
 
   // Crear ciudades de Ecuador
   Logger.log('Creando ciudades...');
-  const cities = await Promise.all([
-    prisma.city.create({ data: { name: 'Quito', province: Province.PICHINCHA } }),
-    prisma.city.create({ data: { name: 'Guayaquil', province: Province.GUAYAS } }),
+  const cities = await prisma.$transaction([
+    prisma.city.create({
+      data: { name: 'Quito', province: Province.PICHINCHA },
+    }),
+    prisma.city.create({
+      data: { name: 'Guayaquil', province: Province.GUAYAS },
+    }),
     prisma.city.create({ data: { name: 'Cuenca', province: Province.AZUAY } }),
-    prisma.city.create({ data: { name: 'Santo Domingo', province: Province.SANTO_DOMINGO_DE_LOS_TSACHILAS } }),
+    prisma.city.create({
+      data: {
+        name: 'Santo Domingo',
+        province: Province.SANTO_DOMINGO_DE_LOS_TSACHILAS,
+      },
+    }),
     prisma.city.create({ data: { name: 'Manta', province: Province.MANABI } }),
-    prisma.city.create({ data: { name: 'Ambato', province: Province.TUNGURAHUA } }),
-    prisma.city.create({ data: { name: 'Riobamba', province: Province.CHIMBORAZO } }),
-    prisma.city.create({ data: { name: 'Ibarra', province: Province.IMBABURA } }),
-    prisma.city.create({ data: { name: 'Esmeraldas', province: Province.ESMERALDAS } }),
-    prisma.city.create({ data: { name: 'Loja', province: Province.LOJA } })
+    prisma.city.create({
+      data: { name: 'Ambato', province: Province.TUNGURAHUA },
+    }),
+    prisma.city.create({
+      data: { name: 'Riobamba', province: Province.CHIMBORAZO },
+    }),
+    prisma.city.create({
+      data: { name: 'Machala', province: Province.EL_ORO },
+    }),
+    prisma.city.create({
+      data: { name: 'Esmeraldas', province: Province.ESMERALDAS },
+    }),
+    prisma.city.create({ data: { name: 'Loja', province: Province.LOJA } }),
+  ]);
+
+  // Crear tipos de buses
+  Logger.log('Creando tipos de buses...');
+  const busTypes = await prisma.$transaction([
+    prisma.busType.create({
+      data: {
+        name: 'Convencional',
+        description: 'Servicio estándar con capacidad para 46 pasajeros',
+        floorCount: 1,
+        seatsFloor1: 41,
+        seatsFloor2: 0,
+        aditionalPrice: 1.0,
+      },
+    }),
+    prisma.busType.create({
+      data: {
+        name: 'Ejecutivo',
+        description: 'Servicio ejecutivo con asientos más cómodos',
+        floorCount: 1,
+        seatsFloor1: 41,
+        seatsFloor2: 0,
+        aditionalPrice: 1.5,
+      },
+    }),
+    prisma.busType.create({
+      data: {
+        name: 'Semi Cama',
+        description: 'Asientos reclinables para mayor comodidad',
+        floorCount: 1,
+        seatsFloor1: 37,
+        seatsFloor2: 0,
+        aditionalPrice: 2.0,
+      },
+    }),
+    prisma.busType.create({
+      data: {
+        name: 'Cama',
+        description: 'Asientos completamente reclinables para viajes largos',
+        floorCount: 1,
+        seatsFloor1: 29,
+        seatsFloor2: 0,
+        aditionalPrice: 4.0,
+      },
+    }),
+    prisma.busType.create({
+      data: {
+        name: 'Doble Piso Económico',
+        description: 'Dos pisos para mayor capacidad de pasajeros',
+        floorCount: 2,
+        seatsFloor1: 28,
+        seatsFloor2: 28,
+        aditionalPrice: 2.0,
+      },
+    }),
+    prisma.busType.create({
+      data: {
+        name: 'Doble Piso Ejecutivo',
+        description: 'Dos pisos con servicios ejecutivos',
+        floorCount: 2,
+        seatsFloor1: 24,
+        seatsFloor2: 24,
+        aditionalPrice: 4.0,
+      },
+    }),
+    prisma.busType.create({
+      data: {
+        name: 'Microbus',
+        description: 'Vehículo más pequeño para rutas cortas',
+        floorCount: 1,
+        seatsFloor1: 21,
+        seatsFloor2: 0,
+        aditionalPrice: 0.5,
+      },
+    }),
   ]);
 
   // Crear cooperativas
   Logger.log('Creando cooperativas...');
-  const cooperatives = await Promise.all([
+  const cooperatives = await prisma.$transaction([
     prisma.cooperative.create({
       data: {
         name: 'Cooperativa de Transportes Ecuador',
         address: 'Av. Amazonas N23-45 y Veintimilla',
         phone: '022222222',
         email: 'info@cooptecec.com',
-        logo: 'coop1.png'
-      }
+        logo: 'coop1.png',
+        facebook: 'https://www.facebook.com/share/g/1AYRGX7aNr/',
+        instagram:
+          'https://www.instagram.com/reel/DKpreMQvH1G/?igsh=enJ5c3VjM2c0b3lp',
+        X: 'https://x.com/shachimu',
+        website: 'https://cooptecec.com.ec',
+      },
     }),
     prisma.cooperative.create({
       data: {
@@ -51,367 +233,526 @@ async function main() {
         address: 'Av. 6 de Diciembre N34-123 y La Niña',
         phone: '023333333',
         email: 'contacto@transportesandinos.ec',
-        logo: 'coop2.png'
-      }
-    })
+        logo: 'coop2.png',
+        facebook: 'https://www.facebook.com/share/g/1AYRGX7aNr/',
+        instagram:
+          'https://www.instagram.com/reel/DKpreMQvH1G/?igsh=enJ5c3VjM2c0b3lp',
+        X: 'https://x.com/shachimu',
+        website: 'https://transportesandinos.com.ec',
+      },
+    }),
   ]);
+
+  // Crear buses
+  Logger.log('Creando buses...');
+  const buses = [];
+  const plates = [
+    'ABC-1234',
+    'XYZ-5678',
+    'QWE-9012',
+    'RTY-3456',
+    'UIO-7890',
+    'ASD-1234',
+    'FDS-5678',
+  ];
+
+  for (let i = 0; i <= 6; i++) {
+    const busType = busTypes[i % busTypes.length];
+    const bus = await prisma.bus.create({
+      data: {
+        cooperativeId: cooperatives[0].id,
+        licensePlate: plates[i],
+        chassisBrand: ['Mercedes-Benz', 'Volvo', 'Scania', 'Hino', 'Foton'][
+          i % 5
+        ],
+        bodyworkBrand: 'Carrocerías del Sur',
+        photo: `bus-${i + 1}.jpg`,
+        busTypeId: busType.id,
+      },
+      include: {
+        busType: true,
+      },
+    });
+
+    // Crear asientos para el bus
+    const seatsData = [];
+    const seatsPerRow = 4;
+    if (bus.busType.floorCount == 1) {
+      //sacar el total de filas
+      const rows = Math.floor(bus.busType.seatsFloor1 / seatsPerRow);
+      
+      const seatsFloor1 = generateBusSeats(1, rows, 0, seatsPerRow, 1);
+      seatsData.push(...seatsFloor1);
+    }
+
+    if (bus.busType.floorCount == 2) {
+      const rows = Math.floor(bus.busType.seatsFloor1 / seatsPerRow);
+      const rows2 = Math.floor(bus.busType.seatsFloor2 / seatsPerRow);
+      const seatsFloor2 = generateBusSeats(2, rows, rows2, seatsPerRow, 1);
+      seatsData.push(...seatsFloor2);
+    }
+
+    await prisma.busSeat.createMany({
+      data: seatsData.map((seat) => ({
+        ...seat,
+        busId: bus.id,
+      })),
+    });
+
+    buses.push(bus);
+  }
+
+  // Crear frecuencias de viaje
+  Logger.log('Creando frecuencias de viaje...');
+
+  // Ruta Quito - Guayaquil
+  const frequency1 = await prisma.frequency.create({
+    data: {
+      cooperativeId: cooperatives[0].id,
+      originCityId: cities[0].id, // Quito
+      destinationCityId: cities[1].id, // Guayaquil
+      departureTime: new Date('2023-01-01T08:00:00'),
+      status: Status.ACTIVE,
+      antResolution: `ANT-RES-${Date.now()}-1`,
+    },
+  });
+
+  // Ruta Guayaquil - Cuenca
+  const frequency2 = await prisma.frequency.create({
+    data: {
+      cooperativeId: cooperatives[0].id,
+      originCityId: cities[1].id, // Guayaquil
+      destinationCityId: cities[2].id, // Cuenca
+      departureTime: new Date('2023-01-01T10:00:00'),
+      status: Status.ACTIVE,
+      antResolution: `ANT-RES-${Date.now()}-2`,
+    },
+  });
+
+  // Ruta Cuenca - Ambato
+  const frequency3 = await prisma.frequency.create({
+    data: {
+      cooperativeId: cooperatives[1].id,
+      originCityId: cities[2].id, // Cuenca
+      destinationCityId: cities[4].id, // Ambato
+      departureTime: new Date('2023-01-01T14:00:00'),
+      status: Status.ACTIVE,
+      antResolution: `ANT-RES-${Date.now()}-3`,
+    },
+  });
+
+  // Ruta Ambato - Quito
+  const frequency4 = await prisma.frequency.create({
+    data: {
+      cooperativeId: cooperatives[1].id,
+      originCityId: cities[4].id, // Ambato
+      destinationCityId: cities[0].id, // Quito
+      departureTime: new Date('2023-01-01T14:00:00'),
+      status: Status.ACTIVE,
+      antResolution: `ANT-RES-${Date.now()}-4`,
+    },
+  });
+
+  // Agregar paradas intermedias para la ruta Quito - Guayaquil
+  await prisma.intermediateStop.createMany({
+    data: [
+      {
+        frequencyId: frequency1.id,
+        cityId: cities[5].id, // Ambato
+        order: 1,
+      },
+      {
+        frequencyId: frequency1.id,
+        cityId: cities[6].id, // Riobamba
+        order: 2,
+      },
+    ],
+  });
+
+  // Crear precios de rutas
+  await prisma.routePrice.create({
+    data: {
+      frequencyId: frequency1.id,
+      normalPrice: 4.0,
+      vipPrice: 6.0,
+      childDiscount: 50.0,
+      seniorDiscount: 25.0,
+      handicappedDiscount: 30.0,
+      taxRate: 15.0,
+      includesTax: false,
+    },
+  });
+
+  await prisma.routePrice.create({
+    data: {
+      frequencyId: frequency2.id,
+      normalPrice: 2.0,
+      vipPrice: 3.0,
+      childDiscount: 50.0,
+      seniorDiscount: 25.0,
+      handicappedDiscount: 30.0,
+      taxRate: 15.0,
+      includesTax: false,
+    },
+  });
+
+  await prisma.routePrice.create({
+    data: {
+      frequencyId: frequency3.id,
+      normalPrice: 2.0,
+      vipPrice: 3.0,
+      childDiscount: 50.0,
+      seniorDiscount: 25.0,
+      handicappedDiscount: 30.0,
+      taxRate: 15.0,
+      includesTax: false,
+    },
+  });
+
+  await prisma.routePrice.create({
+    data: {
+      frequencyId: frequency4.id,
+      normalPrice: 2.0,
+      vipPrice: 3.0,
+      childDiscount: 50.0,
+      seniorDiscount: 25.0,
+      handicappedDiscount: 30.0,
+      taxRate: 15.0,
+      includesTax: false,
+    },
+  });
+
+  // Crear hojas de ruta
+  const routeSheetHeader = await prisma.routeSheetHeader.create({
+    data: {
+      cooperativeId: cooperatives[0].id,
+      startDate: new Date('2025-06-29'),
+      status: Status.ACTIVE,
+    },
+  });
+
+  // Agregar detalles a la hoja de ruta
+  await prisma.routeSheetDetail.create({
+    data: {
+      routeSheetHeaderId: routeSheetHeader.id,
+      frequencyId: frequency1.id,
+      busId: buses[0].id,
+      status: Status.ACTIVE,
+    },
+  });
+
+  await prisma.routeSheetDetail.create({
+    data: {
+      routeSheetHeaderId: routeSheetHeader.id,
+      frequencyId: frequency2.id,
+      busId: buses[1].id,
+      status: Status.ACTIVE,
+    },
+  });
+
+  await prisma.routeSheetDetail.create({
+    data: {
+      routeSheetHeaderId: routeSheetHeader.id,
+      frequencyId: frequency3.id,
+      busId: buses[2].id,
+      status: Status.ACTIVE,
+    },
+  });
+
+  await prisma.routeSheetDetail.create({
+    data: {
+      routeSheetHeaderId: routeSheetHeader.id,
+      frequencyId: frequency4.id,
+      busId: buses[3].id,
+      status: Status.ACTIVE,
+    },
+  });
+
+  await prisma.routeSheetDetail.create({
+    data: {
+      routeSheetHeaderId: routeSheetHeader.id,
+      frequencyId: frequency1.id,
+      busId: buses[4].id,
+      status: Status.ACTIVE,
+    },
+  });
+
+  await prisma.routeSheetDetail.create({
+    data: {
+      routeSheetHeaderId: routeSheetHeader.id,
+      frequencyId: frequency2.id,
+      busId: buses[5].id,
+      status: Status.ACTIVE,
+    },
+  });
 
   // Hashear contraseña común para usuarios de prueba
   const passwordHash = await hash('admin4566', 10);
 
-  // Crear usuarios para cada rol
-  Logger.log('Creando usuarios...');
-  await Promise.all([
-    // Admin
+  const users = await Promise.all([
+    // 🔑 Administradores
     prisma.user.create({
       data: {
         idNumber: '1805472386',
-        documentType: DocumentType.CEDULA,
-        firstName: 'Admin',
-        lastName: 'Sistema',
+        documentType: 'cedula', // ✅ String según tu esquema
+        firstName: 'David',
+        lastName: 'Administrador',
         email: 'admin@chasquigo.com',
         password: passwordHash,
-        phone: '0999999999',
+        phone: '0999123456',
         role: Role.ADMIN,
-        cooperativeId: cooperatives[0].id
-      }
+        cooperativeId: cooperatives[0].id,
+      },
     }),
     prisma.user.create({
       data: {
-        idNumber: '1805271937',
-        documentType: DocumentType.CEDULA,
-        firstName: 'Admin',
-        lastName: 'Sistema',
-        email: 'admin2@chasquigo.com',
+        idNumber: '0928374651',
+        documentType: 'cedula',
+        firstName: 'María',
+        lastName: 'Supervisor',
+        email: 'supervisor@andinos.com',
+        password: passwordHash,
+        phone: '0987654321',
+        role: Role.ADMIN,
+        cooperativeId: cooperatives[1].id,
+      },
+    }),
+
+    // 🚗 Conductores
+    prisma.user.create({
+      data: {
+        idNumber: '1712345678',
+        documentType: 'cedula',
+        firstName: 'Carlos',
+        lastName: 'Conductor',
+        email: 'carlos.conductor@chasquigo.com',
+        password: passwordHash,
+        phone: '0995555111',
+        role: Role.DRIVER,
+        cooperativeId: cooperatives[0].id,
+      },
+    }),
+    prisma.user.create({
+      data: {
+        idNumber: '0987654320', // ✅ Diferente para evitar duplicados
+        documentType: 'cedula',
+        firstName: 'Ana',
+        lastName: 'Conductora',
+        email: 'ana.conductora@andinos.com',
+        password: passwordHash,
+        phone: '0966666222',
+        role: Role.DRIVER,
+        cooperativeId: cooperatives[1].id,
+      },
+    }),
+
+    // 👥 Clientes para testing
+    prisma.user.create({
+      data: {
+        idNumber: '1234567890',
+        documentType: 'cedula',
+        firstName: 'Juan',
+        lastName: 'Pérez',
+        email: 'juan.perez@email.com',
+        password: passwordHash,
+        phone: '0987123456',
+        role: Role.CLIENT,
+      },
+    }),
+    prisma.user.create({
+      data: {
+        idNumber: '0987654322', // ✅ Diferente
+        documentType: 'cedula',
+        firstName: 'María',
+        lastName: 'González',
+        email: 'maria.gonzalez@email.com',
         password: passwordHash,
         phone: '0976543210',
-        role: Role.ADMIN,
-        cooperativeId: cooperatives[0].id
-      }
+        role: Role.CLIENT,
+      },
     }),
     prisma.user.create({
       data: {
-        idNumber: '1805359203',
-        documentType: DocumentType.CEDULA,
-        firstName: 'Admin',
-        lastName: 'Sistema',
-        email: 'admin3@chasquigo.com',
-        password: passwordHash,
-        phone: '0976543210',
-        role: Role.ADMIN,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    prisma.user.create({
-      data: {
-        idNumber: '1805465489',
-        documentType: DocumentType.CEDULA,
-        firstName: 'Admin',
-        lastName: 'Sistema',
-        email: 'admin4@chasquigo.com',
-        password: passwordHash,
-        phone: '0976543210',
-        role: Role.ADMIN,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    prisma.user.create({
-      data: {
-        idNumber: '1850137918',
-        documentType: DocumentType.CEDULA,
-        firstName: 'Admin',
-        lastName: 'Sistema',
-        email: 'admin5@chasquigo.com',
-        password: passwordHash,
-        phone: '0976543210',
-        role: Role.ADMIN,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    
-    // Drivers
-    prisma.user.create({
-      data: {
-        idNumber: '1805472386001',
-        documentType: DocumentType.RUC,
-        firstName: 'Driver',
-        lastName: 'Sistema',
-        email: 'driver1@chasquigo.com',
-        password: passwordHash,
-        phone: '0987654321',
-        role: Role.DRIVER,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    prisma.user.create({
-      data: {
-        idNumber: '1805271937001',
-        documentType: DocumentType.RUC,
-        firstName: 'Driver',
-        lastName: 'Sistema',
-        email: 'driver2@chasquigo.com',
-        password: passwordHash,
-        phone: '0987654321',
-        role: Role.DRIVER,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    prisma.user.create({
-      data: {
-        idNumber: '1805359203001',
-        documentType: DocumentType.RUC,
-        firstName: 'Driver',
-        lastName: 'Sistema',
-        email: 'driver3@chasquigo.com',
-        password: passwordHash,
-        phone: '0987654321',
-        role: Role.DRIVER,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    prisma.user.create({
-      data: {
-        idNumber: '1850137918001',
-        documentType: DocumentType.RUC,
-        firstName: 'Driver',
-        lastName: 'Sistema',
-        email: 'driver4@chasquigo.com',
-        password: passwordHash,
-        phone: '0987654321',
-        role: Role.DRIVER,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    prisma.user.create({
-      data: {
-        idNumber: '1805465489001',
-        documentType: DocumentType.RUC,
-        firstName: 'Driver',
-        lastName: 'Sistema',
-        email: 'driver5@chasquigo.com',
-        password: passwordHash,
-        phone: '0987654321',
-        role: Role.DRIVER,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    
-    // Clientes
-    prisma.user.create({
-      data: {
-        idNumber: '9999999999',
-        documentType: DocumentType.CEDULA,
-        firstName: 'CONSUMIDOR',
-        lastName: 'FINAL',
-        email: 'consumidorfinal@chasquigo.com',
+        idNumber: '1122334455',
+        documentType: 'cedula',
+        firstName: 'Pedro',
+        lastName: 'Rodríguez',
+        email: 'pedro.rodriguez@email.com',
         password: passwordHash,
         phone: '0965432109',
         role: Role.CLIENT,
-      }
+      },
+    }),
+
+    // 🧑‍💼 Staff para confirmar pagos en efectivo
+    prisma.user.create({
+      data: {
+        idNumber: '1805123456',
+        documentType: 'cedula',
+        firstName: 'Luis',
+        lastName: 'Vendedor',
+        email: 'vendedor@chasquigo.com',
+        password: passwordHash,
+        phone: '0977777333',
+        role: Role.WORKER,
+        cooperativeId: cooperatives[0].id,
+      },
     }),
     prisma.user.create({
       data: {
-        idNumber: '9999999999999',
-        documentType: DocumentType.RUC,
-        firstName: 'CONSUMIDOR',
-        lastName: 'FINAL',
-        email: 'consumidorfinal@chasquigo.com',
+        idNumber: '0912345678',
+        documentType: 'cedula',
+        firstName: 'Carmen',
+        lastName: 'Vendedora',
+        email: 'vendedora@andinos.com',
         password: passwordHash,
-        phone: '0954321098',
-        role: Role.CLIENT,
-      }
-    })
-  ]);
-
-  // Crear tipos de bus primero
-  Logger.log('Creando tipos de bus...');
-  const busTypes = await Promise.all([
-    prisma.busType.create({
-      data: {
-        name: 'Convencional', floorCount: 1, capacity: 46 },
-    }),
-    prisma.busType.create({
-      data: {
-        name: 'Ejecutivo', floorCount: 1, capacity: 40 },
-    }),
-    prisma.busType.create({
-      data: {
-        name: 'Semi Cama', floorCount: 1, capacity: 36 },
-    }),
-    prisma.busType.create({
-      data: {
-        name: 'Cama', floorCount: 1, capacity: 30 },
-    }),
-    prisma.busType.create({
-      data: {
-        name: 'Doble Piso Económico', floorCount: 2, capacity: 60 },
-    }),
-    prisma.busType.create({
-      data: {
-        name: 'Doble Piso Ejecutivo', floorCount: 2, capacity: 48 },
-    }),
-    prisma.busType.create({
-      data: {
-        name: 'Microbus', floorCount: 1, capacity: 30 },
-    }),
-  ]);
-
-  // Crear buses para cada cooperativa
-  Logger.log('Creando buses...');
-  const buses = await Promise.all([
-    // Buses para la primera cooperativa
-    prisma.bus.create({
-      data: {
-        cooperativeId: cooperatives[0].id,
-        licensePlate: 'ABC-1234',
-        chassisBrand: 'Mercedes Benz',
-        bodyworkBrand: 'Busscar',
-        stoppageDays: 2,
-        busTypeId: busTypes[0].id,
-      }
-    }),
-    prisma.bus.create({
-      data: {
-        cooperativeId: cooperatives[0].id,
-        licensePlate: 'ABC-1235',
-        chassisBrand: 'Mercedes Benz',
-        bodyworkBrand: 'Busscar',
-        stoppageDays: 2,
-        busTypeId: busTypes[1].id,
-      }
-    }),
-    prisma.bus.create({
-      data: {
-        cooperativeId: cooperatives[0].id,
-        licensePlate: 'ABC-1236',
-        chassisBrand: 'Mercedes Benz',
-        bodyworkBrand: 'Busscar',
-        stoppageDays: 2,
-        busTypeId: busTypes[2].id,
-      }
-    }),
-    prisma.bus.create({
-      data: {
-        cooperativeId: cooperatives[0].id,
-        licensePlate: 'ABC-1237',
-        chassisBrand: 'Mercedes Benz',
-        bodyworkBrand: 'Busscar',
-        stoppageDays: 2,
-        busTypeId: busTypes[3].id,
-      }
-    }),
-    prisma.bus.create({
-      data: {
-        cooperativeId: cooperatives[0].id,
-        licensePlate: 'ABC-1238',
-        chassisBrand: 'Mercedes Benz',
-        bodyworkBrand: 'Busscar',
-        stoppageDays: 2,
-        busTypeId: busTypes[4].id,
-      }
-    }),
-    prisma.bus.create({
-      data: {
-        cooperativeId: cooperatives[0].id,
-        licensePlate: 'ABC-1239',
-        chassisBrand: 'Mercedes Benz',
-        bodyworkBrand: 'Busscar',
-        stoppageDays: 2,
-        busTypeId: busTypes[5].id,
-      }
-    }),
-    prisma.bus.create({
-      data: {
-        cooperativeId: cooperatives[0].id,
-        licensePlate: 'ABC-1240',
-        chassisBrand: 'Mercedes Benz',
-        bodyworkBrand: 'Busscar',
-        stoppageDays: 2,
-        busTypeId: busTypes[6].id,
-      }
-    }),
-  ]);
-
-  // Crear asientos para cada bus
-  Logger.log('Creando asientos...');
-  for (const bus of buses) {
-    const busType = await prisma.busType.findUnique({ where: { id: bus.busTypeId } });
-    const capacity = busType?.capacity;
-    for (let i = 1; i <= capacity; i++) {
-      const isVip = i <= Math.floor(capacity * 0.25); // 25% asientos VIP
-      await prisma.busSeat.create({
-        data: {
-          number: i.toString(),
-          type: isVip ? 'VIP' : 'NORMAL',
-          location: i % 2 === 0 ? 'ventana' : 'pasillo',
-          busId: bus.id
-        }
-      });
-    }
-  }
-
-  // Crear frecuencias entre ciudades
-  Logger.log('Creando frecuencias...');
-  const frequencies = await Promise.all([
-    // Quito - Guayaquil
-    prisma.frequency.create({
-      data: {
-        departureTime: new Date('2023-01-01T08:00:00'),
-        status: 'activo',
-        antResolution: 'RES-2023-001',
-        cooperativeId: cooperatives[0].id,
-        originCityId: cities[0].id,    // Quito
-        destinationCityId: cities[1].id // Guayaquil
-      }
-    }),
-    // Guayaquil - Cuenca
-    prisma.frequency.create({
-      data: {
-        departureTime: new Date('2023-01-01T10:00:00'),
-        status: 'activo',
-        antResolution: 'RES-2023-002',
+        phone: '0988888444',
+        role: Role.WORKER,
         cooperativeId: cooperatives[1].id,
-        originCityId: cities[1].id,    // Guayaquil
-        destinationCityId: cities[2].id // Cuenca
-      }
-    })
+      },
+    }),
   ]);
 
-  // Crear paradas intermedias para las frecuencias
-  Logger.log('Creando paradas intermedias...');
-  await Promise.all([
-    // Paradas para Quito - Guayaquil
-    prisma.intermediateStop.create({
-      data: {
-        frequency: { connect: { id: frequencies[0].id } },
-        city: { connect: { id: cities[3].id } }, // Santo Domingo
-        order: 1
-      }
-    }),
-    prisma.intermediateStop.create({
-      data: {
-        frequency: { connect: { id: frequencies[0].id } },
-        city: { connect: { id: cities[4].id } }, // Manta
-        order: 2
-      }
-    }),
-    
-    // Paradas para Guayaquil - Cuenca
-    prisma.intermediateStop.create({
-      data: {
-        frequency: { connect: { id: frequencies[1].id } },
-        city: { connect: { id: cities[5].id } }, // Ambato
-        order: 1
-      }
-    })
+  // ========================================
+  // 🎫 CREAR ALGUNOS TICKETS DE EJEMPLO
+  // ========================================
+  Logger.log('🎫 Creando tickets de ejemplo...');
+
+  const exampleTickets = await Promise.all([
+    // Ticket 1: Juan Pérez en Quito → Guayaquil 08:30
+    prisma.purchaseTransaction
+      .create({
+        data: {
+          buyerUserId: users[4].id, // Juan Pérez
+          totalAmount: 25.0,
+          taxAmount: 3.75,
+          discountAmount: 0.0,
+          finalAmount: 28.75,
+          status: 'completed',
+        },
+      })
+      .then(async (transaction) => {
+        const ticket = await prisma.ticket.create({
+          data: {
+            buyerUserId: users[4].id,
+            busId: buses[0].id,
+            frequencyId: frequency1.id,
+            totalBasePrice: 25.0,
+            totalDiscountAmount: 0.0,
+            totalTaxAmount: 3.75,
+            finalTotalPrice: 28.75,
+            status: TicketStatus.CONFIRMED, // ✅ Usar enum
+            passengerCount: 1,
+            originStopId: cities[0].id,
+            destinationStopId: cities[1].id,
+            purchaseTransactionId: transaction.id,
+            qrCode: `TKT_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`, // ✅ substring en lugar de substr
+          },
+        });
+
+        // Crear pasajero para este ticket
+        const firstSeat = await prisma.busSeat.findFirst({
+          where: { busId: buses[0].id, number: 1 },
+        });
+
+        await prisma.ticketPassenger.create({
+          data: {
+            ticketId: ticket.id,
+            passengerUserId: users[4].id,
+            seatId: firstSeat!.id,
+            seatType: SeatType.VIP, // ✅ Usar enum
+            passengerType: PassengerType.NORMAL, // ✅ Usar enum
+            basePrice: 35.0,
+            discountAmount: 0.0,
+            taxAmount: 5.25,
+            finalPrice: 40.25,
+          },
+        });
+
+        return ticket;
+      }),
+
+    // Ticket 2: María González en Guayaquil → Cuenca
+    prisma.purchaseTransaction
+      .create({
+        data: {
+          buyerUserId: users[5].id, // María González
+          totalAmount: 18.0,
+          taxAmount: 2.7,
+          discountAmount: 0.0,
+          finalAmount: 20.7,
+          status: 'completed',
+        },
+      })
+      .then(async (transaction) => {
+        const ticket = await prisma.ticket.create({
+          data: {
+            buyerUserId: users[5].id,
+            busId: buses[2].id,
+            frequencyId: frequency2.id,
+            totalBasePrice: 18.0,
+            totalDiscountAmount: 0.0,
+            totalTaxAmount: 2.7,
+            finalTotalPrice: 20.7,
+            status: TicketStatus.CONFIRMED,
+            passengerCount: 1,
+            originStopId: cities[1].id,
+            destinationStopId: cities[2].id,
+            purchaseTransactionId: transaction.id,
+            qrCode: `TKT_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+          },
+        });
+
+        const firstNormalSeat = await prisma.busSeat.findFirst({
+          where: { busId: buses[2].id, type: SeatType.NORMAL },
+        });
+
+        await prisma.ticketPassenger.create({
+          data: {
+            ticketId: ticket.id,
+            passengerUserId: users[5].id,
+            seatId: firstNormalSeat!.id,
+            seatType: SeatType.NORMAL,
+            passengerType: PassengerType.NORMAL,
+            basePrice: 18.0,
+            discountAmount: 0.0,
+            taxAmount: 2.7,
+            finalPrice: 20.7,
+          },
+        });
+
+        return ticket;
+      }),
   ]);
 
-  Logger.log('¡Semilla completada exitosamente!');
+  // Mostrar resumen
+  const citiesCount = await prisma.city.count();
+  const busesCount = await prisma.bus.count();
+  const seatsCount = await prisma.busSeat.count();
+  const frequenciesCount = await prisma.frequency.count();
+  const routeSheetsCount = await prisma.routeSheetHeader.count();
+
+  console.log('\nResumen de datos creados:');
+  console.log('-------------------------');
+  console.log(`Ciudades: ${citiesCount}`);
+  console.log(`Cooperativas: ${cooperatives.length}`);
+  console.log(`Tipos de buses: ${busTypes.length}`);
+  console.log(`Buses: ${busesCount}`);
+  console.log(`Asientos: ${seatsCount}`);
+  console.log(`Frecuencias: ${frequenciesCount}`);
+  console.log(`Hojas de ruta: ${routeSheetsCount}`);
+  console.log('\nCredenciales de acceso:');
+  console.log('----------------------');
+  console.log('Admin: admin@chasquigo.com / admin4566');
+  console.log('Conductor: driver1@chasquigo.com / admin4566');
+  console.log('Cliente: cliente@chasquigo.com / admin4566');
+
+  Logger.log('¡Datos de prueba creados exitosamente!');
 }
 
 main()
   .catch((e) => {
-    console.error('Error en la semilla:', e);
+    console.error('❌ Error en la semilla:', e);
     process.exit(1);
   })
   .finally(async () => {

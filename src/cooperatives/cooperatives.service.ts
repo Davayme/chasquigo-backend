@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { UpdateCooperativeDto } from './dto/update-cooperative.dto';
+import { UpdateCooperativeDto } from './dto/req/update-cooperative.dto';
 import { CreateCooperativeDto } from './dto/req/create-cooperative.dto';
 
 @Injectable()

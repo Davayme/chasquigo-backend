@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+/* import { Injectable } from '@nestjs/common';
 import { CreatePaymentDto } from './dto/req/create-payment.dto';
 import { UpdatePaymentDto } from './dto/req/update-payment.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -133,3 +133,4 @@ export class PaymentsService {
     });
   }
 }
+ */

@@ -21,5 +21,17 @@ export class CooperativeResponseDto {
   logo: string;
 
   @ApiProperty()
+  facebook: string;
+
+  @ApiProperty()
+  instagram: string;
+
+  @ApiProperty()
+  X: string;
+
+  @ApiProperty()
+  website: string;
+
+  @ApiProperty()
   createdAt: Date;
 }
