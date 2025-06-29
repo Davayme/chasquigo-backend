@@ -34,6 +34,7 @@ export interface BusSeatsResponse {
         ticketId: number;
         passengerType: string;
         passengerName: string;
+        
       };
     }[];
   }[];

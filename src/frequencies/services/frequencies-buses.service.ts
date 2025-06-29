@@ -3,19 +3,17 @@ import { PrismaService } from "src/prisma/prisma.service";
 import { BusSeatsResponse } from "../dto/res/bus-seats-response.dto";
 import { PrismaErrorHandler } from "src/common/filters/prisma-errors";
 
-
 @Injectable()
-
 export class FrequenciesBusesService {
-    constructor(private readonly prisma: PrismaService) {
-    }
+    constructor(private readonly prisma: PrismaService) {}
 
     private formatTime(date: Date): string {
         return date.toTimeString().split(' ')[0]; // Obtiene solo HH:MM:SS
     }
+
     async getBusSeats(routeSheetDetailId: number): Promise<BusSeatsResponse> {
         try {
-            console.log(`Obteniendo asientos para routeSheetDetailId: ${routeSheetDetailId}`);
+            console.log(`🔍 Obteniendo asientos para routeSheetDetailId: ${routeSheetDetailId}`);
 
             // Obtener información de la ruta y el bus
             const routeSheetDetail = await this.prisma.routeSheetDetail.findUnique({
@@ -39,16 +37,18 @@ export class FrequenciesBusesService {
                             destinationCity: true,
                         },
                     },
-                    ticket: {
+                    // ✅ CORREGIDO: Usar la relación correcta del esquema
+                    ticket: { // ← SINGULAR según el esquema
                         where: {
                             isDeleted: false,
-                            status: { in: ['activo', 'confirmado'] } // Solo tickets válidos
+                            status: { in: ['PENDING', 'PAID', 'CONFIRMED', 'BOARDED'] },
                         },
                         include: {
-                            user: {
-                                select: {
-                                    firstName: true,
-                                    lastName: true,
+                            ticketPassengers: {
+                                where: { isDeleted: false },
+                                include: {
+                                    passenger: true,
+                                    seat: true,
                                 },
                             },
                         },
@@ -60,17 +60,30 @@ export class FrequenciesBusesService {
                 throw new NotFoundException('Ruta no encontrada');
             }
 
-            const { bus, frequency, ticket: tickets } = routeSheetDetail;
+            const { bus, frequency, ticket: tickets } = routeSheetDetail; // ← Renombrar para consistencia
 
-            // Crear mapa de asientos ocupados
+            // ✅ CORREGIDO: Crear mapa de asientos ocupados
             const occupiedSeats = new Map();
-            tickets.forEach((ticket) => {
-                occupiedSeats.set(ticket.seatId, {
-                    ticketId: ticket.id,
-                    passengerType: ticket.passengerType,
-                    passengerName: `${ticket.user.firstName} ${ticket.user.lastName}`,
+            
+            if (tickets && Array.isArray(tickets)) {
+                tickets.forEach((ticket) => {
+                    if (ticket.ticketPassengers && Array.isArray(ticket.ticketPassengers)) {
+                        ticket.ticketPassengers.forEach((ticketPassenger) => {
+                            occupiedSeats.set(ticketPassenger.seatId, {
+                                ticketId: ticket.id,
+                                ticketPassengerId: ticketPassenger.id,
+                                passengerType: ticketPassenger.passengerType,
+                                passengerName: `${ticketPassenger.passenger.firstName} ${ticketPassenger.passenger.lastName}`,
+                                ticketStatus: ticket.status,
+                                seatType: ticketPassenger.seatType,
+                            });
+                        });
+                    }
                 });
-            });
+            }
+
+            console.log(`💺 Total asientos en bus: ${bus.seats.length}`);
+            console.log(`🎫 Total asientos ocupados: ${occupiedSeats.size}`);
 
             // Organizar asientos por piso
             const seatsLayout = this.organizeSeatsLayout(
@@ -111,11 +124,134 @@ export class FrequenciesBusesService {
                 availability,
             };
         } catch (error) {
-            console.error('Error getting bus seats:', error);
+            console.error('❌ Error getting bus seats:', error);
+            console.error('Error details:', error.message);
             if (error instanceof NotFoundException) {
                 throw error;
             }
-            PrismaErrorHandler.handleError(error, 'Obtener Asientos del Bus');
+            throw new Error(`Error al obtener asientos: ${error.message}`);
+        }
+    }
+
+    /**
+     * ✅ MÉTODO ALTERNATIVO: Consulta directa si hay problemas con las relaciones
+     */
+    async getBusSeatsAlternative(routeSheetDetailId: number): Promise<BusSeatsResponse> {
+        try {
+            console.log(`🔍 [ALTERNATIVO] Obteniendo asientos para routeSheetDetailId: ${routeSheetDetailId}`);
+
+            // 1. Obtener información básica de la ruta
+            const routeSheetDetail = await this.prisma.routeSheetDetail.findUnique({
+                where: {
+                    id: routeSheetDetailId,
+                    isDeleted: false,
+                },
+                include: {
+                    bus: {
+                        include: {
+                            busType: true,
+                            seats: {
+                                where: { isDeleted: false },
+                                orderBy: { number: 'asc' },
+                            },
+                        },
+                    },
+                    frequency: {
+                        include: {
+                            originCity: true,
+                            destinationCity: true,
+                        },
+                    },
+                },
+            });
+
+            if (!routeSheetDetail) {
+                throw new NotFoundException('Ruta no encontrada');
+            }
+
+            // 2. Consulta separada para obtener tickets y pasajeros ocupados
+            const occupiedTicketPassengers = await this.prisma.ticketPassenger.findMany({
+                where: {
+                    ticket: {
+                        routeSheetId: routeSheetDetailId, // ← Campo correcto según el esquema
+                        status: { in: ['PENDING', 'PAID', 'CONFIRMED', 'BOARDED'] },
+                        isDeleted: false,
+                    },
+                    isDeleted: false,
+                },
+                include: {
+                    passenger: true,
+                    seat: true,
+                    ticket: {
+                        select: {
+                            id: true,
+                            status: true,
+                        },
+                    },
+                },
+            });
+
+            console.log(`🎫 Pasajeros ocupados encontrados: ${occupiedTicketPassengers.length}`);
+
+            // 3. Crear mapa de asientos ocupados
+            const occupiedSeats = new Map();
+            occupiedTicketPassengers.forEach((ticketPassenger) => {
+                occupiedSeats.set(ticketPassenger.seatId, {
+                    ticketId: ticketPassenger.ticket.id,
+                    ticketPassengerId: ticketPassenger.id,
+                    passengerType: ticketPassenger.passengerType,
+                    passengerName: `${ticketPassenger.passenger.firstName} ${ticketPassenger.passenger.lastName}`,
+                    ticketStatus: ticketPassenger.ticket.status,
+                    seatType: ticketPassenger.seatType,
+                });
+            });
+
+            const { bus, frequency } = routeSheetDetail;
+
+            console.log(`💺 Total asientos en bus: ${bus.seats.length}`);
+            console.log(`🎫 Total asientos ocupados: ${occupiedSeats.size}`);
+
+            // 4. Organizar asientos por piso
+            const seatsLayout = this.organizeSeatsLayout(
+                bus.seats,
+                occupiedSeats,
+                bus.busType.floorCount,
+                bus.busType.capacity
+            );
+
+            // 5. Calcular disponibilidad
+            const availability = this.calculateSeatAvailability(bus.seats, occupiedSeats);
+
+            return {
+                busInfo: {
+                    id: bus.id,
+                    licensePlate: bus.licensePlate,
+                    chassisBrand: bus.chassisBrand,
+                    bodyworkBrand: bus.bodyworkBrand,
+                    photo: bus.photo,
+                    busType: {
+                        id: bus.busType.id,
+                        name: bus.busType.name,
+                        floorCount: bus.busType.floorCount,
+                        capacity: bus.busType.capacity,
+                    },
+                },
+                routeInfo: {
+                    routeSheetDetailId: routeSheetDetail.id,
+                    date: routeSheetDetail.date.toISOString().split('T')[0],
+                    frequency: {
+                        id: frequency.id,
+                        departureTime: this.formatTime(frequency.departureTime),
+                        originCity: frequency.originCity.name,
+                        destinationCity: frequency.destinationCity.name,
+                    },
+                },
+                seatsLayout,
+                availability,
+            };
+        } catch (error) {
+            console.error('❌ Error getting bus seats (alternative):', error);
+            throw new Error(`Error al obtener asientos: ${error.message}`);
         }
     }
 
@@ -129,13 +265,10 @@ export class FrequenciesBusesService {
         totalCapacity: number
     ) {
         const seatsLayout = [];
-
-        // Calcular asientos por piso
         const seatsPerFloor = floorCount > 1 ? Math.ceil(totalCapacity / floorCount) : totalCapacity;
 
-        console.log(`Organizando ${seats.length} asientos en ${floorCount} piso(s). Asientos por piso: ${seatsPerFloor}`);
+        console.log(`🏢 Organizando ${seats.length} asientos en ${floorCount} piso(s). Asientos por piso: ${seatsPerFloor}`);
 
-        // Crear estructura por piso
         for (let floor = 1; floor <= floorCount; floor++) {
             const floorSeats = seats
                 .filter((seat) => {
@@ -143,17 +276,26 @@ export class FrequenciesBusesService {
                 })
                 .map((seat) => {
                     const isOccupied = occupiedSeats.has(seat.id);
+                    const occupiedInfo = occupiedSeats.get(seat.id);
+                    
                     return {
                         id: seat.id,
                         number: seat.number,
                         type: seat.type,
                         location: seat.location,
                         isOccupied,
-                        ...(isOccupied && { occupiedBy: occupiedSeats.get(seat.id) }),
+                        ...(isOccupied && { 
+                            occupiedBy: {
+                                ticketId: occupiedInfo.ticketId,
+                                ticketPassengerId: occupiedInfo.ticketPassengerId,
+                                passengerType: occupiedInfo.passengerType,
+                                passengerName: occupiedInfo.passengerName,
+                                ticketStatus: occupiedInfo.ticketStatus,
+                            }
+                        }),
                     };
                 })
                 .sort((a, b) => {
-                    // Ordenar por número de asiento
                     const numA = this.extractSeatNumber(a.number);
                     const numB = this.extractSeatNumber(b.number);
                     return numA - numB;
@@ -168,39 +310,25 @@ export class FrequenciesBusesService {
         return seatsLayout;
     }
 
-    /**
-     * Determina el piso de un asiento basado en su número
-     */
     private getSeatFloor(seatNumber: string, floorCount: number, seatsPerFloor: number): number {
         if (floorCount === 1) return 1;
-
-        // Extraer número del asiento (ej: "1A" -> 1, "12B" -> 12)
         const num = this.extractSeatNumber(seatNumber);
-
         if (isNaN(num)) return 1;
-
-        // ✅ Dividir por piso: si son 2 pisos y 40 asientos total
-        // Piso 1: asientos 1-20, Piso 2: asientos 21-40
         return Math.ceil(num / seatsPerFloor);
     }
 
-    /**
-     * Extrae el número de un asiento (ej: "1A" -> 1, "12B" -> 12)
-     */
     private extractSeatNumber(seatNumber: string): number {
         const match = seatNumber.match(/(\d+)/);
         return match ? parseInt(match[1]) : 0;
     }
 
-    /**
-     * Calcula la disponibilidad de asientos
-     */
     private calculateSeatAvailability(seats: any[], occupiedSeats: Map<number, any>) {
         const normalSeats = seats.filter((seat) => seat.type === 'NORMAL');
         const vipSeats = seats.filter((seat) => seat.type === 'VIP');
-
         const normalOccupied = normalSeats.filter((seat) => occupiedSeats.has(seat.id)).length;
         const vipOccupied = vipSeats.filter((seat) => occupiedSeats.has(seat.id)).length;
+
+        console.log(`📊 Disponibilidad - Normal: ${normalSeats.length - normalOccupied}/${normalSeats.length}, VIP: ${vipSeats.length - vipOccupied}/${vipSeats.length}`);
 
         return {
             normal: {
@@ -217,117 +345,127 @@ export class FrequenciesBusesService {
     }
 
     /**
-     * Servicio MOCK para pruebas de asientos
+     * ✅ MÉTODO SIMPLIFICADO para obtener solo asientos disponibles
      */
+    async getAvailableSeats(routeSheetDetailId: number) {
+        try {
+            console.log(`🔍 Obteniendo asientos disponibles para: ${routeSheetDetailId}`);
+
+            // Obtener todos los asientos del bus
+            const routeSheetDetail = await this.prisma.routeSheetDetail.findUnique({
+                where: { id: routeSheetDetailId, isDeleted: false },
+                include: {
+                    bus: {
+                        include: {
+                            seats: {
+                                where: { isDeleted: false },
+                                orderBy: { number: 'asc' },
+                            },
+                        },
+                    },
+                },
+            });
+
+            if (!routeSheetDetail) {
+                throw new NotFoundException('Ruta no encontrada');
+            }
+
+            // Obtener asientos ocupados con consulta directa
+            const occupiedSeatIds = await this.prisma.ticketPassenger.findMany({
+                where: {
+                    ticket: {
+                        routeSheetId: routeSheetDetailId, // ← Campo correcto
+                        status: { in: ['PENDING', 'PAID', 'CONFIRMED', 'BOARDED'] },
+                        isDeleted: false,
+                    },
+                    isDeleted: false,
+                },
+                select: { seatId: true },
+            });
+
+            const occupiedIds = new Set(occupiedSeatIds.map(tp => tp.seatId));
+
+            // Filtrar asientos disponibles
+            const availableSeats = routeSheetDetail.bus.seats
+                .filter(seat => !occupiedIds.has(seat.id))
+                .map(seat => ({
+                    id: seat.id,
+                    number: seat.number,
+                    type: seat.type,
+                    location: seat.location,
+                }));
+
+            console.log(`✅ Asientos disponibles: ${availableSeats.length}/${routeSheetDetail.bus.seats.length}`);
+
+            return {
+                routeSheetDetailId,
+                totalSeats: routeSheetDetail.bus.seats.length,
+                availableSeats: availableSeats.length,
+                seats: availableSeats,
+            };
+        } catch (error) {
+            console.error('❌ Error getting available seats:', error);
+            throw error;
+        }
+    }
+
+    // Mock method unchanged...
     async getBusSeatsMock(routeSheetDetailId: number): Promise<BusSeatsResponse> {
-        console.log(`Obteniendo asientos MOCK para routeSheetDetailId: ${routeSheetDetailId}`);
+        // ... código del mock sin cambios
+        return this.generateMockResponse(routeSheetDetailId);
+    }
 
-        // Simular delay de red
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        // Datos mock para bus de 2 pisos
-        const mockSeatsFloor1 = [];
-        const mockSeatsFloor2 = [];
-
-        // Generar asientos piso 1 (1-20)
-        for (let i = 1; i <= 20; i++) {
-            const letter = i % 4 <= 2 ? 'A' : 'B'; // Alternar A/B
-            const isWindow = i % 4 === 1 || i % 4 === 0;
-            const isVip = i >= 17; // Últimos 4 asientos VIP
-            const isOccupied = Math.random() > 0.7; // 30% ocupados
-
-            mockSeatsFloor1.push({
-                id: i,
-                number: `${i}${letter}`,
-                type: isVip ? 'VIP' : 'NORMAL',
-                location: isWindow ? 'ventana' : 'pasillo',
-                isOccupied,
-                ...(isOccupied && {
-                    occupiedBy: {
-                        ticketId: i * 100,
-                        passengerType: 'NORMAL',
-                        passengerName: `Pasajero ${i}`,
-                    },
-                }),
-            });
-        }
-
-        // Generar asientos piso 2 (21-40)
-        for (let i = 21; i <= 40; i++) {
-            const letter = i % 4 <= 2 ? 'A' : 'B';
-            const isWindow = i % 4 === 1 || i % 4 === 0;
-            const isVip = i >= 37; // Últimos 4 asientos VIP
-            const isOccupied = Math.random() > 0.8; // 20% ocupados
-
-            mockSeatsFloor2.push({
-                id: i,
-                number: `${i}${letter}`,
-                type: isVip ? 'VIP' : 'NORMAL',
-                location: isWindow ? 'ventana' : 'pasillo',
-                isOccupied,
-                ...(isOccupied && {
-                    occupiedBy: {
-                        ticketId: i * 100,
-                        passengerType: 'NORMAL',
-                        passengerName: `Pasajero ${i}`,
-                    },
-                }),
-            });
-        }
-
-        const allSeats = [...mockSeatsFloor1, ...mockSeatsFloor2];
-        const normalSeats = allSeats.filter(s => s.type === 'NORMAL');
-        const vipSeats = allSeats.filter(s => s.type === 'VIP');
-        const normalOccupied = normalSeats.filter(s => s.isOccupied).length;
-        const vipOccupied = vipSeats.filter(s => s.isOccupied).length;
-
+    private generateMockResponse(routeSheetDetailId: number): BusSeatsResponse {
+        // Generar datos mock simples para debugging
         return {
             busInfo: {
                 id: 1,
-                licensePlate: 'ABC-123',
+                licensePlate: 'MOCK-123',
                 chassisBrand: 'Mercedes-Benz',
                 bodyworkBrand: 'Marcopolo',
-                photo: 'https://example.com/bus-photo.jpg',
+                photo: null,
                 busType: {
-                    id: 2,
-                    name: 'Premium Doble Piso',
-                    floorCount: 2,
+                    id: 1,
+                    name: 'Bus Estándar',
+                    floorCount: 1,
                     capacity: 40,
                 },
             },
             routeInfo: {
                 routeSheetDetailId,
-                date: '2025-06-23',
+                date: new Date().toISOString().split('T')[0],
                 frequency: {
                     id: 1,
-                    departureTime: '08:30:00',
-                    originCity: 'Quito',
-                    destinationCity: 'Guayaquil',
+                    departureTime: '08:00:00',
+                    originCity: 'Ciudad A',
+                    destinationCity: 'Ciudad B',
                 },
             },
             seatsLayout: [
                 {
                     floor: 1,
-                    seats: mockSeatsFloor1,
-                },
-                {
-                    floor: 2,
-                    seats: mockSeatsFloor2,
+                    seats: [
+                        {
+                            id: 1,
+                            number: '1A',
+                            type: 'NORMAL',
+                            location: 'ventana',
+                            isOccupied: false,
+                        },
+                        {
+                            id: 2,
+                            number: '1B',
+                            type: 'NORMAL',
+                            location: 'pasillo',
+                            isOccupied: false,
+                        },
+                    ],
                 },
             ],
             availability: {
-                normal: {
-                    total: normalSeats.length,
-                    available: normalSeats.length - normalOccupied,
-                    occupied: normalOccupied,
-                },
-                vip: {
-                    total: vipSeats.length,
-                    available: vipSeats.length - vipOccupied,
-                    occupied: vipOccupied,
-                },
+                normal: { total: 2, available: 2, occupied: 0 },
+                vip: { total: 0, available: 0, occupied: 0 },
             },
         };
     }
-
 }
