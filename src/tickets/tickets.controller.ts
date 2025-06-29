@@ -25,8 +25,6 @@ export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) { }
 
   @Post('initiate-purchase')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
   @ApiOperation({
     summary: '🚀 Iniciar proceso de compra de tickets',
     description: 'Inicia el proceso de compra creando la transacción y tickets en estado PENDING. Funciona tanto para pagos con Stripe como en efectivo.'
@@ -124,8 +122,6 @@ export class TicketsController {
   }
 
   @Post('confirm-cash-payment')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
   @ApiOperation({
     summary: '💰 Confirmar pago en efectivo',
     description: 'Confirma un pago realizado en efectivo en oficina. Solo para staff autorizado.'
@@ -163,8 +159,6 @@ export class TicketsController {
   }
 
   @Get('purchase-status/:purchaseTransactionId')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
   @ApiOperation({
     summary: '📊 Consultar estado de compra',
     description: 'Obtiene el estado actual de una transacción de compra. Útil para polling después de iniciar una compra con Stripe.'
@@ -191,7 +185,6 @@ export class TicketsController {
   }
 
   @Post('cancel-purchase/:purchaseTransactionId')
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: '❌ Cancelar compra',
