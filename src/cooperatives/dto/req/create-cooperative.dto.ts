@@ -27,4 +27,24 @@ export class CreateCooperativeDto {
   @IsString()
   @IsNotEmpty()
   logo: string;
+
+  @ApiProperty({ example: 'https://www.facebook.com/share/g/1AYRGX7aNr/' })
+  @IsString()
+  @IsNotEmpty()
+  facebook: string;
+
+  @ApiProperty({ example: 'https://www.instagram.com/reel/DKpreMQvH1G/?igsh=enJ5c3VjM2c0b3lp' })
+  @IsString()
+  @IsNotEmpty()
+  instagram: string;
+
+  @ApiProperty({ example: 'https://x.com/shachimu' })
+  @IsString()
+  @IsNotEmpty()
+  x: string;
+
+  @ApiProperty({ example: 'https://chasquigo.com' })
+  @IsString()
+  @IsNotEmpty()
+  website: string;
 }
