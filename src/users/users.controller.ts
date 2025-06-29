@@ -51,8 +51,8 @@ export class UsersController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard) 
-  @ApiBearerAuth('JWT')
+/*   @UseGuards(JwtAuthGuard) 
+  @ApiBearerAuth('JWT') */
   @ApiOperation({ summary: 'Obtener usuarios' })
   @ApiResponse({ status: 200, description: 'Lista de todos los usuarios' })
   async getAllAdminUsers() {
