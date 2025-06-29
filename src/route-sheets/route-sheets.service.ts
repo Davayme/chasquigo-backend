@@ -8,7 +8,7 @@ import { PrismaErrorHandler } from 'src/common/filters/prisma-errors';
 export class RouteSheetsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createRouteSheetDto: CreateRouteSheetDto) {
+/*   async create(createRouteSheetDto: CreateRouteSheetDto) {
     const { frequencyIds, busIds, startDate, endDate, ...routeSheetData } = createRouteSheetDto;
     
     // Validar que hay al menos una frecuencia y un bus
@@ -318,6 +318,6 @@ export class RouteSheetsService {
       'No se pudo formar un ciclo cerrado con las frecuencias proporcionadas. ' +
       'Asegúrese de que todas las frecuencias estén conectadas en un solo ciclo.'
     );
-  }
+  } */
   
 }

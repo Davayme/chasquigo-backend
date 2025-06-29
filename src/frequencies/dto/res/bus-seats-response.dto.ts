@@ -28,7 +28,7 @@ export interface BusSeatsResponse {
       id: number;
       number: string;
       type: 'NORMAL' | 'VIP';
-      location: 'pasillo' | 'ventana';
+      location: 'WINDOW_LEFT' | 'WINDOW_RIGHT' | 'AISLE_LEFT' | 'AISLE_RIGHT' | 'MIDDLE';
       isOccupied: boolean;
       occupiedBy?: {
         ticketId: number;
@@ -48,6 +48,24 @@ export interface BusSeatsResponse {
       total: number;
       available: number;
       occupied: number;
+    };
+  };
+  pricing: {
+    normalSeat: {
+      basePrice: number;
+      discounts: {
+        CHILD: number;
+        SENIOR: number;
+        HANDICAPPED: number;
+      };
+    };
+    vipSeat: {
+      basePrice: number;
+      discounts: {
+        CHILD: number;
+        SENIOR: number;
+        HANDICAPPED: number;
+      };
     };
   };
 }

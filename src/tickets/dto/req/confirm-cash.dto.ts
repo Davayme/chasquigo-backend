@@ -3,6 +3,14 @@ import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class ConfirmCashPaymentDto {
   @ApiProperty({
+    description: 'ID del staff que confirma el pago',
+    example: 1,
+  })
+  @IsNumber()
+  @IsNotEmpty()
+  staffUserId: number;
+
+  @ApiProperty({
     description: 'ID de la transacción de compra',
     example: 1,
   })

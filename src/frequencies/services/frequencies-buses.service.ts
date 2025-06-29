@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "src/prisma/prisma.service";
 import { BusSeatsResponse } from "../dto/res/bus-seats-response.dto";
-import { PrismaErrorHandler } from "src/common/filters/prisma-errors";
 
 @Injectable()
 export class FrequenciesBusesService {
@@ -35,24 +34,10 @@ export class FrequenciesBusesService {
                         include: {
                             originCity: true,
                             destinationCity: true,
+                            routePrice: true, // ✅ AGREGADO: Incluir precios de la ruta
                         },
                     },
-                    // ✅ CORREGIDO: Usar la relación correcta del esquema
-                    ticket: { // ← SINGULAR según el esquema
-                        where: {
-                            isDeleted: false,
-                            status: { in: ['PENDING', 'PAID', 'CONFIRMED', 'BOARDED'] },
-                        },
-                        include: {
-                            ticketPassengers: {
-                                where: { isDeleted: false },
-                                include: {
-                                    passenger: true,
-                                    seat: true,
-                                },
-                            },
-                        },
-                    },
+                    routeSheetHeader: true, // ✅ CORREGIDO: Incluir header para obtener fecha
                 },
             });
 
@@ -60,41 +45,66 @@ export class FrequenciesBusesService {
                 throw new NotFoundException('Ruta no encontrada');
             }
 
-            const { bus, frequency, ticket: tickets } = routeSheetDetail; // ← Renombrar para consistencia
+            // ✅ CORREGIDO: Consulta separada para obtener tickets ocupados
+            // Usar busId y frequencyId en lugar de routeSheetId que no existe
+            const occupiedTicketPassengers = await this.prisma.ticketPassenger.findMany({
+                where: {
+                    ticket: {
+                        busId: routeSheetDetail.busId,
+                        frequencyId: routeSheetDetail.frequencyId,
+                        status: { in: ['PENDING', 'PAID', 'CONFIRMED', 'BOARDED'] },
+                        isDeleted: false,
+                    },
+                    isDeleted: false,
+                },
+                include: {
+                    passenger: true,
+                    seat: true,
+                    ticket: {
+                        select: {
+                            id: true,
+                            status: true,
+                        },
+                    },
+                },
+            });
 
-            // ✅ CORREGIDO: Crear mapa de asientos ocupados
+            console.log(`🎫 Pasajeros ocupados encontrados: ${occupiedTicketPassengers.length}`);
+
+            // Crear mapa de asientos ocupados
             const occupiedSeats = new Map();
-            
-            if (tickets && Array.isArray(tickets)) {
-                tickets.forEach((ticket) => {
-                    if (ticket.ticketPassengers && Array.isArray(ticket.ticketPassengers)) {
-                        ticket.ticketPassengers.forEach((ticketPassenger) => {
-                            occupiedSeats.set(ticketPassenger.seatId, {
-                                ticketId: ticket.id,
-                                ticketPassengerId: ticketPassenger.id,
-                                passengerType: ticketPassenger.passengerType,
-                                passengerName: `${ticketPassenger.passenger.firstName} ${ticketPassenger.passenger.lastName}`,
-                                ticketStatus: ticket.status,
-                                seatType: ticketPassenger.seatType,
-                            });
-                        });
-                    }
+            occupiedTicketPassengers.forEach((ticketPassenger) => {
+                occupiedSeats.set(ticketPassenger.seatId, {
+                    ticketId: ticketPassenger.ticket.id,
+                    ticketPassengerId: ticketPassenger.id,
+                    passengerType: ticketPassenger.passengerType,
+                    passengerName: `${ticketPassenger.passenger.firstName} ${ticketPassenger.passenger.lastName}`,
+                    ticketStatus: ticketPassenger.ticket.status,
+                    seatType: ticketPassenger.seatType,
                 });
-            }
+            });
+
+            const { bus, frequency, routeSheetHeader } = routeSheetDetail;
 
             console.log(`💺 Total asientos en bus: ${bus.seats.length}`);
             console.log(`🎫 Total asientos ocupados: ${occupiedSeats.size}`);
+
+            // ✅ CORREGIDO: Calcular capacity desde busType
+            const totalCapacity = bus.busType.seatsFloor1 + bus.busType.seatsFloor2;
 
             // Organizar asientos por piso
             const seatsLayout = this.organizeSeatsLayout(
                 bus.seats,
                 occupiedSeats,
                 bus.busType.floorCount,
-                bus.busType.capacity
+                totalCapacity
             );
 
             // Calcular disponibilidad
             const availability = this.calculateSeatAvailability(bus.seats, occupiedSeats);
+
+            // ✅ AGREGADO: Calcular precios de los asientos
+            const pricing = this.calculatePricing(frequency.routePrice);
 
             return {
                 busInfo: {
@@ -107,12 +117,14 @@ export class FrequenciesBusesService {
                         id: bus.busType.id,
                         name: bus.busType.name,
                         floorCount: bus.busType.floorCount,
-                        capacity: bus.busType.capacity,
+                        capacity: totalCapacity, // ✅ Calculado dinámicamente
                     },
                 },
                 routeInfo: {
                     routeSheetDetailId: routeSheetDetail.id,
-                    date: routeSheetDetail.date.toISOString().split('T')[0],
+                    date: routeSheetHeader?.startDate 
+                        ? routeSheetHeader.startDate.toISOString().split('T')[0] 
+                        : new Date().toISOString().split('T')[0], // ✅ Usar fecha del header
                     frequency: {
                         id: frequency.id,
                         departureTime: this.formatTime(frequency.departureTime),
@@ -122,6 +134,7 @@ export class FrequenciesBusesService {
                 },
                 seatsLayout,
                 availability,
+                pricing, // ✅ AGREGADO: Información de precios
             };
         } catch (error) {
             console.error('❌ Error getting bus seats:', error);
@@ -160,8 +173,10 @@ export class FrequenciesBusesService {
                         include: {
                             originCity: true,
                             destinationCity: true,
+                            routePrice: true, // ✅ AGREGADO: Incluir precios de la ruta
                         },
                     },
+                    routeSheetHeader: true,
                 },
             });
 
@@ -169,11 +184,12 @@ export class FrequenciesBusesService {
                 throw new NotFoundException('Ruta no encontrada');
             }
 
-            // 2. Consulta separada para obtener tickets y pasajeros ocupados
+            // 2. ✅ CORREGIDO: Usar busId + frequencyId para encontrar tickets
             const occupiedTicketPassengers = await this.prisma.ticketPassenger.findMany({
                 where: {
                     ticket: {
-                        routeSheetId: routeSheetDetailId, // ← Campo correcto según el esquema
+                        busId: routeSheetDetail.busId,
+                        frequencyId: routeSheetDetail.frequencyId,
                         status: { in: ['PENDING', 'PAID', 'CONFIRMED', 'BOARDED'] },
                         isDeleted: false,
                     },
@@ -206,21 +222,27 @@ export class FrequenciesBusesService {
                 });
             });
 
-            const { bus, frequency } = routeSheetDetail;
+            const { bus, frequency, routeSheetHeader } = routeSheetDetail;
 
             console.log(`💺 Total asientos en bus: ${bus.seats.length}`);
             console.log(`🎫 Total asientos ocupados: ${occupiedSeats.size}`);
+
+            // ✅ CORREGIDO: Calcular capacity desde busType
+            const totalCapacity = bus.busType.seatsFloor1 + bus.busType.seatsFloor2;
 
             // 4. Organizar asientos por piso
             const seatsLayout = this.organizeSeatsLayout(
                 bus.seats,
                 occupiedSeats,
                 bus.busType.floorCount,
-                bus.busType.capacity
+                totalCapacity
             );
 
             // 5. Calcular disponibilidad
             const availability = this.calculateSeatAvailability(bus.seats, occupiedSeats);
+
+            // ✅ AGREGADO: Calcular precios de los asientos
+            const pricing = this.calculatePricing(frequency.routePrice);
 
             return {
                 busInfo: {
@@ -233,12 +255,14 @@ export class FrequenciesBusesService {
                         id: bus.busType.id,
                         name: bus.busType.name,
                         floorCount: bus.busType.floorCount,
-                        capacity: bus.busType.capacity,
+                        capacity: totalCapacity,
                     },
                 },
                 routeInfo: {
                     routeSheetDetailId: routeSheetDetail.id,
-                    date: routeSheetDetail.date.toISOString().split('T')[0],
+                    date: routeSheetHeader?.startDate 
+                        ? routeSheetHeader.startDate.toISOString().split('T')[0] 
+                        : new Date().toISOString().split('T')[0],
                     frequency: {
                         id: frequency.id,
                         departureTime: this.formatTime(frequency.departureTime),
@@ -248,6 +272,7 @@ export class FrequenciesBusesService {
                 },
                 seatsLayout,
                 availability,
+                pricing, // ✅ AGREGADO: Información de precios
             };
         } catch (error) {
             console.error('❌ Error getting bus seats (alternative):', error);
@@ -265,14 +290,14 @@ export class FrequenciesBusesService {
         totalCapacity: number
     ) {
         const seatsLayout = [];
-        const seatsPerFloor = floorCount > 1 ? Math.ceil(totalCapacity / floorCount) : totalCapacity;
 
-        console.log(`🏢 Organizando ${seats.length} asientos en ${floorCount} piso(s). Asientos por piso: ${seatsPerFloor}`);
+        console.log(`🏢 Organizando ${seats.length} asientos en ${floorCount} piso(s).`);
 
         for (let floor = 1; floor <= floorCount; floor++) {
             const floorSeats = seats
                 .filter((seat) => {
-                    return this.getSeatFloor(seat.number, floorCount, seatsPerFloor) === floor;
+                    // ✅ CORREGIDO: Usar el campo floor del asiento directamente
+                    return seat.floor === floor;
                 })
                 .map((seat) => {
                     const isOccupied = occupiedSeats.has(seat.id);
@@ -280,7 +305,7 @@ export class FrequenciesBusesService {
                     
                     return {
                         id: seat.id,
-                        number: seat.number,
+                        number: seat.number.toString(), // ✅ Convertir a string
                         type: seat.type,
                         location: seat.location,
                         isOccupied,
@@ -296,8 +321,8 @@ export class FrequenciesBusesService {
                     };
                 })
                 .sort((a, b) => {
-                    const numA = this.extractSeatNumber(a.number);
-                    const numB = this.extractSeatNumber(b.number);
+                    const numA = parseInt(a.number);
+                    const numB = parseInt(b.number);
                     return numA - numB;
                 });
 
@@ -370,11 +395,12 @@ export class FrequenciesBusesService {
                 throw new NotFoundException('Ruta no encontrada');
             }
 
-            // Obtener asientos ocupados con consulta directa
+            // ✅ CORREGIDO: Obtener asientos ocupados usando busId + frequencyId
             const occupiedSeatIds = await this.prisma.ticketPassenger.findMany({
                 where: {
                     ticket: {
-                        routeSheetId: routeSheetDetailId, // ← Campo correcto
+                        busId: routeSheetDetail.busId,
+                        frequencyId: routeSheetDetail.frequencyId,
                         status: { in: ['PENDING', 'PAID', 'CONFIRMED', 'BOARDED'] },
                         isDeleted: false,
                     },
@@ -447,16 +473,16 @@ export class FrequenciesBusesService {
                     seats: [
                         {
                             id: 1,
-                            number: '1A',
+                            number: '1', // ✅ Número como string
                             type: 'NORMAL',
-                            location: 'ventana',
+                            location: 'WINDOW_LEFT',
                             isOccupied: false,
                         },
                         {
                             id: 2,
-                            number: '1B',
+                            number: '2', // ✅ Número como string
                             type: 'NORMAL',
-                            location: 'pasillo',
+                            location: 'AISLE_LEFT',
                             isOccupied: false,
                         },
                     ],
@@ -465,6 +491,83 @@ export class FrequenciesBusesService {
             availability: {
                 normal: { total: 2, available: 2, occupied: 0 },
                 vip: { total: 0, available: 0, occupied: 0 },
+            },
+            pricing: {
+                normalSeat: {
+                    basePrice: 25.0,
+                    discounts: {
+                        CHILD: 12.5,
+                        SENIOR: 18.75,
+                        HANDICAPPED: 12.5,
+                    },
+                },
+                vipSeat: {
+                    basePrice: 35.0,
+                    discounts: {
+                        CHILD: 17.5,
+                        SENIOR: 26.25,
+                        HANDICAPPED: 17.5,
+                    },
+                },
+            },
+        };
+    }
+
+    /**
+     * Calcula los precios con descuentos para asientos normales y VIP
+     */
+    private calculatePricing(routePrice: any) {
+        if (!routePrice) {
+            // Precios por defecto si no hay configuración
+            return {
+                normalSeat: {
+                    basePrice: 25.0,
+                    discounts: {
+                        CHILD: 12.5,
+                        SENIOR: 18.75,
+                        HANDICAPPED: 12.5,
+                    },
+                },
+                vipSeat: {
+                    basePrice: 35.0,
+                    discounts: {
+                        CHILD: 17.5,
+                        SENIOR: 26.25,
+                        HANDICAPPED: 17.5,
+                    },
+                },
+            };
+        }
+
+        const normalPrice = parseFloat(routePrice.normalPrice.toString());
+        const vipPrice = parseFloat(routePrice.vipPrice.toString());
+
+        const childDiscountPercent = parseFloat(
+            routePrice.childDiscount.toString(),
+        );
+        const seniorDiscountPercent = parseFloat(
+            routePrice.seniorDiscount.toString(),
+        );
+        const handicappedDiscountPercent = parseFloat(
+            routePrice.handicappedDiscount.toString(),
+        );
+
+        return {
+            normalSeat: {
+                basePrice: normalPrice,
+                discounts: {
+                    CHILD: normalPrice * (1 - childDiscountPercent / 100),
+                    SENIOR: normalPrice * (1 - seniorDiscountPercent / 100),
+                    HANDICAPPED: normalPrice * (1 - handicappedDiscountPercent / 100),
+                },
+            },
+            vipSeat: {
+                basePrice: vipPrice,
+                discounts: {
+                    CHILD: vipPrice * (1 - childDiscountPercent / 100),
+                    SENIOR: vipPrice * (1 - seniorDiscountPercent / 100),
+                    HANDICAPPED: vipPrice * (1 - handicappedDiscountPercent / 100),
+                },
             },
         };
     }

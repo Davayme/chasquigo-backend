@@ -73,7 +73,7 @@ export class FrequenciesBusesController {
                                         id: { type: 'number', example: 1 },
                                         number: { type: 'string', example: '1A' },
                                         type: { type: 'string', enum: ['NORMAL', 'VIP'], example: 'NORMAL' },
-                                        location: { type: 'string', enum: ['ventana', 'pasillo'], example: 'ventana' },
+                                        location: { type: 'string', enum: ['WINDOW_LEFT', 'WINDOW_RIGHT', 'AISLE_LEFT', 'AISLE_RIGHT', 'MIDDLE'], example: 'WINDOW_LEFT' },
                                         isOccupied: { type: 'boolean', example: false },
                                         occupiedBy: {
                                             type: 'object',
@@ -119,24 +119,6 @@ export class FrequenciesBusesController {
         return this.frequenciesBusesService.getBusSeats(routeSheetDetailId);
     }
 
-    @Get('bus-seats-mock/:routeSheetDetailId')
-    @ApiOperation({
-        summary: '🧪 [MOCK] Obtener distribución de asientos con datos estáticos',
-        description: 'Endpoint temporal que devuelve datos estáticos de asientos para pruebas del frontend. Simula bus de 2 pisos con 40 asientos.'
-    })
-    @ApiParam({
-        name: 'routeSheetDetailId',
-        description: 'ID del detalle de hoja de ruta (para referencia)',
-        type: 'number',
-        example: 1
-    })
-    @ApiResponse({
-        status: 200,
-        description: 'Datos estáticos de asientos devueltos exitosamente'
-    })
-    @ApiResponse({ status: 400, description: 'ID de ruta inválido' })
-    getBusSeatsMock(@Param('routeSheetDetailId', ParseIntPipe) routeSheetDetailId: number) {
-        return this.frequenciesBusesService.getBusSeatsMock(routeSheetDetailId);
-    }
+    
 
 }

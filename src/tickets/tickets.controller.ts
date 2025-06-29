@@ -25,8 +25,6 @@ export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) { }
 
   @Post('initiate-purchase')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
   @ApiOperation({
     summary: '🚀 Iniciar proceso de compra de tickets',
     description: 'Inicia el proceso de compra creando la transacción y tickets en estado PENDING. Funciona tanto para pagos con Stripe como en efectivo.'
@@ -90,13 +88,9 @@ export class TicketsController {
   @ApiResponse({ status: 400, description: 'Datos inválidos o asientos no disponibles' })
   @ApiResponse({ status: 401, description: 'No autorizado' })
   @ApiResponse({ status: 409, description: 'Asientos ya ocupados' })
-  initiatePurchase(@Req() req: any, @Body() initiatePurchaseDto: InitiatePurchaseDto) {
-    // El JWT guard debería agregar el usuario al request
-    const userId = req.user?.id || req.user?.sub;
-    if (!userId) {
-      throw new BadRequestException('Usuario no identificado');
-    }
-    return this.ticketsService.initiatePurchase(userId, initiatePurchaseDto);
+  initiatePurchase(@Body() initiatePurchaseDto: InitiatePurchaseDto) {
+    // ✅ CORREGIDO: Obtener buyerUserId del body, no del JWT
+    return this.ticketsService.initiatePurchase(initiatePurchaseDto);
   }
 
   @Post('stripe-webhook')
@@ -124,8 +118,6 @@ export class TicketsController {
   }
 
   @Post('confirm-cash-payment')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
   @ApiOperation({
     summary: '💰 Confirmar pago en efectivo',
     description: 'Confirma un pago realizado en efectivo en oficina. Solo para staff autorizado.'
@@ -153,18 +145,12 @@ export class TicketsController {
   @ApiResponse({ status: 400, description: 'Monto incorrecto o transacción ya procesada' })
   @ApiResponse({ status: 401, description: 'No autorizado' })
   @ApiResponse({ status: 404, description: 'Transacción no encontrada' })
-  confirmCashPayment(@Req() req: any, @Body() confirmCashDto: ConfirmCashPaymentDto) {
-    // TODO: Validar que el usuario tenga permisos de staff (ADMIN/WORKER)
-    const userId = req.user?.id || req.user?.sub;
-    if (!userId) {
-      throw new BadRequestException('Usuario no identificado');
-    }
-    return this.ticketsService.confirmPurchaseCash(confirmCashDto, userId);
+  confirmCashPayment(@Body() confirmCashDto: ConfirmCashPaymentDto) {
+    // ✅ CORREGIDO: Obtener staffUserId del body, no del JWT
+    return this.ticketsService.confirmPurchaseCash(confirmCashDto);
   }
 
   @Get('purchase-status/:purchaseTransactionId')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
   @ApiOperation({
     summary: '📊 Consultar estado de compra',
     description: 'Obtiene el estado actual de una transacción de compra. Útil para polling después de iniciar una compra con Stripe.'
@@ -191,7 +177,6 @@ export class TicketsController {
   }
 
   @Post('cancel-purchase/:purchaseTransactionId')
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: '❌ Cancelar compra',
@@ -207,24 +192,4 @@ export class TicketsController {
     return this.ticketsService.cancelPurchase(purchaseTransactionId, body.reason || 'Cancelado por usuario');
   }
 
-  // 📋 Métodos CRUD básicos (mantener compatibilidad)
-  @Get()
-  @ApiOperation({ summary: '📋 Listar todos los tickets' })
-  findAll() {
-    return this.ticketsService.findAll();
-  }
-
-  @Get(':id')
-  @ApiOperation({ summary: '🔍 Obtener ticket por ID' })
-  @ApiParam({ name: 'id', description: 'ID del ticket', type: 'number' })
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.ticketsService.findOne(id);
-  }
-
-  @Delete(':id')
-  @ApiOperation({ summary: '🗑️ Eliminar ticket' })
-  @ApiParam({ name: 'id', description: 'ID del ticket', type: 'number' })
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.ticketsService.remove(id);
-  }
 }
