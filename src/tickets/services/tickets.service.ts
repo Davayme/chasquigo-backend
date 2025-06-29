@@ -1,9 +1,9 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { StripeService } from '../stripe/stripe.service';
-import { InitiatePurchaseDto, PassengerDataDto } from '../tickets/dto/req/passenger-data.dto';
-import { ConfirmCashPaymentDto } from './dto/req/confirm-cash.dto';
-import { PurchaseResponse, PricingCalculation } from '../tickets/dto/res/purcharse-response';
+import { PrismaService } from '../../prisma/prisma.service';
+import { StripeService } from '../../stripe/stripe.service';
+import { InitiatePurchaseDto, PassengerDataDto } from '../dto/req/passenger-data.dto';
+import { ConfirmCashPaymentDto } from '../dto/req/confirm-cash.dto';
+import { PurchaseResponse, PricingCalculation } from '../dto/res/purcharse-response';
 import { TicketStatus, PassengerType } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 

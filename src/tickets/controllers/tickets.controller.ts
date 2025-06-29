@@ -14,10 +14,9 @@ import {
   Request
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
-import { TicketsService } from './tickets.service';
-import { InitiatePurchaseDto } from '../tickets/dto/req/passenger-data.dto';
-import { ConfirmCashPaymentDto } from './dto/req/confirm-cash.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { TicketsService } from '../services/tickets.service';
+import { InitiatePurchaseDto } from '../dto/req/passenger-data.dto';
+import { ConfirmCashPaymentDto } from '../dto/req/confirm-cash.dto';
 
 @ApiTags('🎫 Tickets - Sistema de Compra')
 @Controller('tickets')
