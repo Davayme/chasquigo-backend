@@ -1,19 +1,31 @@
-import { IsString, IsIn, IsNotEmpty, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsEnum, IsInt, Max, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { SeatType } from '@prisma/client';
+import { SeatLocation, SeatType } from '@prisma/client';
 
 export class BusSeatDto {
   @ApiProperty({
-    description: 'Número o identificador del asiento',
-    example: '1A'
+    description: 'Piso del asiento',
+    example: 1,
+    minimum: 1,
+    maximum: 2
   })
-  @IsString()
-  @IsNotEmpty()
-  number: string;
+  @IsInt()
+  @Min(1)
+  @Max(2)
+  floor: number;
+
+  @ApiProperty({
+    description: 'Número o identificador del asiento',
+    example: 1
+  })
+  @IsInt()
+  @Min(1)
+  @Max(99)
+  number: number;
 
   @ApiProperty({
     description: 'Tipo de asiento',
-    example: 'normal',
+    example: 'NORMAL',
     enum: SeatType
   })
   @IsString()
@@ -22,10 +34,10 @@ export class BusSeatDto {
 
   @ApiProperty({
     description: 'Ubicación del asiento',
-    example: 'ventana',
-    enum: ['pasillo', 'ventana']
+    example: 'WINDOW',
+    enum: SeatLocation
   })
   @IsString()
-  @IsIn(['pasillo', 'ventana'])
-  location: string;
+  @IsEnum(SeatLocation)
+  location: SeatLocation;
 }

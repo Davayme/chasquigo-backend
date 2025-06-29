@@ -45,17 +45,6 @@ export class CreateBusDto {
   photo: string;
 
   @ApiProperty({ 
-    description: 'Días de parada (descanso)',
-    example: 1,
-    minimum: 0,
-    required: false
-  })
-  @IsInt()
-  @Min(0)
-  @IsOptional()
-  stoppageDays?: number;
-
-  @ApiProperty({ 
     description: 'ID del tipo de bus',
     example: 1
   })

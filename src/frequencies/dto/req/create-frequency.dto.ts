@@ -1,5 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsNotEmpty, IsNumber, IsString, Matches } from "class-validator";
+import { Status } from "@prisma/client";
+import { IsEnum, IsNotEmpty, IsNumber, IsString, Matches } from "class-validator";
 
 export class CreateFrequencyDto {
     @ApiProperty({
@@ -39,10 +40,12 @@ export class CreateFrequencyDto {
     @ApiProperty({
         description: 'Estado de la frecuencia',
         example: 'Activo',
+        enum: Status,
     })
     @IsString()
     @IsNotEmpty()
-    status: string;
+    @IsEnum(Status)
+    status: Status;
 
     @ApiProperty({
         description: 'URL de archivo de la resolución de la ANT',
