@@ -97,8 +97,7 @@ async function main() {
   await prisma.intermediateStop.deleteMany({});
   await prisma.frequency.deleteMany({});
   await prisma.busSeat.deleteMany({});
-  await prisma.busType.deleteMany({});
-  await prisma.bus.deleteMany({});
+  await prisma.bus.deleteMany({}); // Eliminar buses ANTES que busType
   await prisma.busType.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.cooperative.deleteMany({});
@@ -427,7 +426,7 @@ async function main() {
   const routeSheetHeader = await prisma.routeSheetHeader.create({
     data: {
       cooperativeId: cooperatives[0].id,
-      startDate: new Date('2025-06-30'),
+      startDate: new Date('2025-06-29'),
       status: Status.ACTIVE,
     },
   });

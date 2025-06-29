@@ -48,6 +48,14 @@ export class PassengerDataDto {
 
 export class InitiatePurchaseDto {
   @ApiProperty({
+    description: 'ID del usuario que realiza la compra',
+    example: 1,
+  })
+  @IsNumber()
+  @IsNotEmpty()
+  buyerUserId: number;
+
+  @ApiProperty({
     description: 'ID del detalle de hoja de ruta',
     example: 1,
   })

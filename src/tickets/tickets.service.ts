@@ -27,7 +27,8 @@ export class TicketsService {
               destinationCity: true,
             },
           }, 
-          bus: true 
+          bus: true,
+          routeSheetHeader: true, // ✅ Incluir header para obtener fecha
         },
       });
 
@@ -48,12 +49,13 @@ export class TicketsService {
         throw new BadRequestException('Algunos asientos no existen en este bus');
       }
 
-      // Verificar que los asientos no estén ocupados
+      // ✅ CORREGIDO: Verificar que los asientos no estén ocupados usando busId + frequencyId
       const occupiedSeats = await this.prisma.ticketPassenger.findMany({
         where: {
           seatId: { in: seatIds },
           ticket: {
-            routeSheetId: routeSheetDetailId,
+            busId: routeSheet.busId,
+            frequencyId: routeSheet.frequencyId,
             status: { in: [TicketStatus.PENDING, TicketStatus.PAID, TicketStatus.CONFIRMED, TicketStatus.BOARDED] },
             isDeleted: false,
           },
@@ -241,8 +243,8 @@ export class TicketsService {
   /**
    * 🎫 INICIAR PROCESO DE COMPRA
    */
-  async initiatePurchase(buyerUserId: number, initiatePurchaseDto: InitiatePurchaseDto): Promise<PurchaseResponse> {
-    const { routeSheetDetailId, passengers, paymentMethod } = initiatePurchaseDto;
+  async initiatePurchase(initiatePurchaseDto: InitiatePurchaseDto): Promise<PurchaseResponse> {
+    const { buyerUserId, routeSheetDetailId, passengers, paymentMethod } = initiatePurchaseDto;
 
     try {
       console.log(`🚀 Iniciando compra para usuario ${buyerUserId} con ${passengers.length} pasajeros`);
@@ -273,11 +275,12 @@ export class TicketsService {
           },
         });
 
-        // Crear Ticket grupal
+        // ✅ CORREGIDO: Crear Ticket grupal con busId y frequencyId
         const ticket = await tx.ticket.create({
           data: {
             buyerUserId,
-            routeSheetId: routeSheetDetailId,
+            busId: availabilityCheck.routeSheet.busId,
+            frequencyId: availabilityCheck.routeSheet.frequencyId,
             totalBasePrice: pricing.totals.totalBasePrice,
             totalDiscountAmount: pricing.totals.totalDiscountAmount,
             totalTaxAmount: pricing.totals.totalTaxAmount,
@@ -351,7 +354,9 @@ export class TicketsService {
           passengerCount: result.ticket.passengerCount,
           routeInfo: {
             routeSheetDetailId: result.routeInfo.id,
-            date: result.routeInfo.date.toISOString().split('T')[0],
+            date: result.routeInfo.routeSheetHeader?.startDate 
+              ? result.routeInfo.routeSheetHeader.startDate.toISOString().split('T')[0]
+              : new Date().toISOString().split('T')[0],
             originCity: result.routeInfo.frequency.originCity.name,
             destinationCity: result.routeInfo.frequency.destinationCity.name,
             departureTime: result.routeInfo.frequency.departureTime.toTimeString(),
@@ -360,9 +365,9 @@ export class TicketsService {
         passengers: result.ticketPassengers.map(tp => ({
           id: tp.id,
           passengerName: `${tp.passenger.firstName} ${tp.passenger.lastName}`,
-          seatNumber: tp.seat.number,
-          seatType: tp.seatType,
-          passengerType: tp.passengerType,
+          seatNumber: tp.seat.number.toString(), // ✅ Convertir a string
+          seatType: tp.seatType.toString(),
+          passengerType: tp.passengerType.toString(),
           finalPrice: parseFloat(tp.finalPrice.toString()),
         })),
       };
@@ -384,7 +389,7 @@ export class TicketsService {
       console.log(`💳 Confirmando compra Stripe: Transaction ${purchaseTransactionId}, PaymentIntent: ${stripePaymentIntentId}`);
 
       const result = await this.prisma.$transaction(async (tx) => {
-        // Obtener transacción
+        // ✅ CORREGIDO: Obtener transacción con tickets y datos relacionados
         const purchaseTransaction = await tx.purchaseTransaction.findUnique({
           where: { id: purchaseTransactionId },
           include: {
@@ -396,14 +401,11 @@ export class TicketsService {
                     seat: true,
                   },
                 },
-                routeSheet: {
+                Bus: true,
+                Frequency: {
                   include: {
-                    frequency: {
-                      include: {
-                        originCity: true,
-                        destinationCity: true,
-                      },
-                    },
+                    originCity: true,
+                    destinationCity: true,
                   },
                 },
               },
@@ -446,13 +448,7 @@ export class TicketsService {
           data: { status: TicketStatus.CONFIRMED },
         });
 
-        // Actualizar disponibilidad de asientos
-        await this.updateSeatAvailability(
-          tx,
-          ticket.routeSheetId, 
-          ticket.ticketPassengers.map(tp => tp.seatId), 
-          'confirm'
-        );
+        // ✅ ELIMINAR: updateSeatAvailability ya que no existe availableNormalSeats/availableVIPSeats en el nuevo esquema
 
         return {
           purchaseTransaction: { ...purchaseTransaction, status: 'completed' },
@@ -461,8 +457,16 @@ export class TicketsService {
         };
       });
 
-      // Preparar respuesta
+      // ✅ CORREGIDO: Obtener información de la ruta desde la frecuencia directamente
       const ticket = result.purchaseTransaction.tickets[0];
+      const frequency = await this.prisma.frequency.findUnique({
+        where: { id: ticket.frequencyId },
+        include: {
+          originCity: true,
+          destinationCity: true,
+        },
+      });
+
       const response: PurchaseResponse = {
         purchaseTransaction: {
           id: result.purchaseTransaction.id,
@@ -480,19 +484,19 @@ export class TicketsService {
           status: TicketStatus.CONFIRMED,
           passengerCount: ticket.passengerCount,
           routeInfo: {
-            routeSheetDetailId: ticket.routeSheetId,
-            date: ticket.routeSheet.date.toISOString().split('T')[0],
-            originCity: ticket.routeSheet.frequency.originCity.name,
-            destinationCity: ticket.routeSheet.frequency.destinationCity.name,
-            departureTime: ticket.routeSheet.frequency.departureTime.toTimeString(),
+            routeSheetDetailId: 0, // No disponible desde ticket
+            date: new Date().toISOString().split('T')[0], // Usar fecha actual por ahora
+            originCity: frequency?.originCity.name || 'N/A',
+            destinationCity: frequency?.destinationCity.name || 'N/A',
+            departureTime: frequency?.departureTime.toTimeString() || '00:00:00',
           },
         },
         passengers: ticket.ticketPassengers.map(tp => ({
           id: tp.id,
           passengerName: `${tp.passenger.firstName} ${tp.passenger.lastName}`,
-          seatNumber: tp.seat.number,
-          seatType: tp.seatType,
-          passengerType: tp.passengerType,
+          seatNumber: tp.seat.number.toString(), // ✅ Convertir a string
+          seatType: tp.seatType.toString(),
+          passengerType: tp.passengerType.toString(),
           finalPrice: parseFloat(tp.finalPrice.toString()),
         })),
         payment: {
@@ -514,14 +518,14 @@ export class TicketsService {
   /**
    * 💰 CONFIRMAR COMPRA CON EFECTIVO
    */
-  async confirmPurchaseCash(confirmCashDto: ConfirmCashPaymentDto, staffUserId: number): Promise<PurchaseResponse> {
-    const { purchaseTransactionId, amount, notes } = confirmCashDto;
+  async confirmPurchaseCash(confirmCashDto: ConfirmCashPaymentDto): Promise<PurchaseResponse> {
+    const { staffUserId, purchaseTransactionId, amount, notes } = confirmCashDto;
 
     try {
-      console.log(`💰 Confirmando compra en efectivo: Transaction ${purchaseTransactionId}, Monto: ${amount}`);
+      console.log(`💰 Confirmando compra en efectivo: Transaction ${purchaseTransactionId}, Monto: ${amount}, Staff: ${staffUserId}`);
 
       const result = await this.prisma.$transaction(async (tx) => {
-        // Obtener transacción
+        // ✅ CORREGIDO: Obtener transacción con tickets
         const purchaseTransaction = await tx.purchaseTransaction.findUnique({
           where: { id: purchaseTransactionId },
           include: {
@@ -533,14 +537,11 @@ export class TicketsService {
                     seat: true,
                   },
                 },
-                routeSheet: {
+                Bus: true,
+                Frequency: {
                   include: {
-                    frequency: {
-                      include: {
-                        originCity: true,
-                        destinationCity: true,
-                      },
-                    },
+                    originCity: true,
+                    destinationCity: true,
                   },
                 },
               },
@@ -589,14 +590,6 @@ export class TicketsService {
           data: { status: TicketStatus.CONFIRMED },
         });
 
-        // Actualizar disponibilidad de asientos
-        await this.updateSeatAvailability(
-          tx,
-          ticket.routeSheetId, 
-          ticket.ticketPassengers.map(tp => tp.seatId), 
-          'confirm'
-        );
-
         return {
           purchaseTransaction: { ...purchaseTransaction, status: 'completed' },
           ticket: { ...ticket, status: TicketStatus.CONFIRMED },
@@ -604,7 +597,7 @@ export class TicketsService {
         };
       });
 
-      // Preparar respuesta similar a Stripe
+      // ✅ CORREGIDO: Preparar respuesta usando Frequency directamente
       const ticket = result.purchaseTransaction.tickets[0];
       const response: PurchaseResponse = {
         purchaseTransaction: {
@@ -623,19 +616,19 @@ export class TicketsService {
           status: TicketStatus.CONFIRMED,
           passengerCount: ticket.passengerCount,
           routeInfo: {
-            routeSheetDetailId: ticket.routeSheetId,
-            date: ticket.routeSheet.date.toISOString().split('T')[0],
-            originCity: ticket.routeSheet.frequency.originCity.name,
-            destinationCity: ticket.routeSheet.frequency.destinationCity.name,
-            departureTime: ticket.routeSheet.frequency.departureTime.toTimeString(),
+            routeSheetDetailId: 0, // No disponible desde ticket
+            date: new Date().toISOString().split('T')[0], // Usar fecha actual por ahora
+            originCity: ticket.Frequency.originCity.name,
+            destinationCity: ticket.Frequency.destinationCity.name,
+            departureTime: ticket.Frequency.departureTime.toTimeString(),
           },
         },
         passengers: ticket.ticketPassengers.map(tp => ({
           id: tp.id,
           passengerName: `${tp.passenger.firstName} ${tp.passenger.lastName}`,
-          seatNumber: tp.seat.number,
-          seatType: tp.seatType,
-          passengerType: tp.passengerType,
+          seatNumber: tp.seat.number.toString(), // ✅ Convertir a string
+          seatType: tp.seatType.toString(),
+          passengerType: tp.passengerType.toString(),
           finalPrice: parseFloat(tp.finalPrice.toString()),
         })),
         payment: {
@@ -720,9 +713,8 @@ export class TicketsService {
             data: { status: TicketStatus.CANCELLED },
           });
 
-          // Liberar asientos
-          const seatIds = ticket.ticketPassengers.map(tp => tp.seatId);
-          await this.updateSeatAvailability(tx, ticket.routeSheetId, seatIds, 'release');
+          // ✅ ELIMINAR: Liberar asientos no necesario en el nuevo esquema
+          // Los asientos se liberan automáticamente al cancelar el ticket
         }
 
         console.log(`✅ Compra cancelada exitosamente: ${purchaseTransactionId}`);
@@ -775,68 +767,7 @@ export class TicketsService {
     }
   }
 
-  /**
-   * 🔧 Actualizar disponibilidad de asientos
-   */
-  private async updateSeatAvailability(
-    tx: any, 
-    routeSheetDetailId: number, 
-    seatIds: number[], 
-    action: 'reserve' | 'confirm' | 'release'
-  ) {
-    try {
-      const routeSheet = await tx.routeSheetDetail.findUnique({
-        where: { id: routeSheetDetailId },
-      });
+  // ✅ ELIMINADO: updateSeatAvailability no existe en el nuevo esquema
+  // Los asientos ocupados se determinan por la existencia de TicketPassenger records
 
-      if (!routeSheet) return;
-
-      const seats = await tx.busSeat.findMany({
-        where: { id: { in: seatIds } },
-      });
-
-      const normalSeats = seats.filter(s => s.type === 'NORMAL').length;
-      const vipSeats = seats.filter(s => s.type === 'VIP').length;
-
-      let normalChange = 0;
-      let vipChange = 0;
-
-      switch (action) {
-        case 'reserve':
-        case 'confirm':
-          normalChange = -normalSeats;
-          vipChange = -vipSeats;
-          break;
-        case 'release':
-          normalChange = normalSeats;
-          vipChange = vipSeats;
-          break;
-      }
-
-      await tx.routeSheetDetail.update({
-        where: { id: routeSheetDetailId },
-        data: {
-          availableNormalSeats: Math.max(0, routeSheet.availableNormalSeats + normalChange),
-          availableVIPSeats: Math.max(0, routeSheet.availableVIPSeats + vipChange),
-        },
-      });
-
-      console.log(`🔧 Disponibilidad actualizada: Normal ${normalChange}, VIP ${vipChange}`);
-    } catch (error) {
-      console.error('❌ Error updating seat availability:', error);
-    }
-  }
-
-  // Métodos CRUD básicos (mantener compatibilidad)
-  findAll() {
-    return `This action returns all tickets`;
-  }
-
-  findOne(id: number) {
-    return `This action returns a #${id} ticket`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} ticket`;
-  }
 }

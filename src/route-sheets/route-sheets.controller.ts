@@ -8,7 +8,7 @@ import { ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 export class RouteSheetsController {
   constructor(private readonly routeSheetsService: RouteSheetsService) {}
 
-  @Post()
+  /* @Post()
   @ApiOperation({ summary: 'Crear una nueva hoja de ruta' })
   @ApiResponse({
     status: 201,
@@ -74,5 +74,5 @@ export class RouteSheetsController {
   @ApiResponse({ status: 404, description: 'Hoja de ruta no encontrada' })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.routeSheetsService.remove(id);
-  }
+  } */
 }
