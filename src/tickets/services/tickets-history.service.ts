@@ -69,50 +69,68 @@ export class TicketsHistoryService {
         },
       });
 
-      // Procesar cada transacción y generar QR si se solicita
-      const tickets: TicketHistoryItem[] = await Promise.all(
-        purchaseTransactions.map(async (transaction) => {
-          const ticket = transaction.tickets[0]; // Cada transacción tiene un ticket grupal
-          
-          let qrBase64: string | undefined;
-          if (includeQR && ticket.qrCode) {
-            try {
-              qrBase64 = await this.generateQRForTicket(ticket.id);
-            } catch (error) {
-              this.logger.warn(`No se pudo generar QR para ticket ${ticket.id}: ${error.message}`);
-            }
-          }
+      this.logger.log(`📊 Encontradas ${purchaseTransactions.length} transacciones para usuario ${userId}`);
 
-          return {
-            id: transaction.id,
-            purchaseDate: transaction.purchaseDate.toISOString(),
-            totalAmount: parseFloat(transaction.finalAmount.toString()),
-            status: transaction.status,
-            paymentMethod: transaction.payment?.method || 'unknown',
-            ticket: {
-              id: ticket.id,
-              qrCode: ticket.qrCode || '',
-              qrBase64,
-              status: ticket.status,
-              passengerCount: ticket.passengerCount,
-              routeInfo: {
-                originCity: ticket.Frequency.originCity.name,
-                destinationCity: ticket.Frequency.destinationCity.name,
-                departureTime: ticket.Frequency.departureTime.toTimeString(),
-                date: transaction.purchaseDate.toISOString().split('T')[0],
-              },
+      // Procesar cada transacción y generar QR si se solicita
+      const tickets: TicketHistoryItem[] = [];
+      
+      for (const transaction of purchaseTransactions) {
+        this.logger.debug(`🔍 Procesando transacción ${transaction.id} con ${transaction.tickets.length} tickets`);
+        
+        const ticket = transaction.tickets[0]; // Cada transacción tiene un ticket grupal
+        
+        // ✅ VALIDACIÓN: Verificar que existe el ticket
+        if (!ticket) {
+          this.logger.warn(`⚠️ Transacción ${transaction.id} no tiene tickets asociados, omitiendo...`);
+          continue;
+        }
+
+        // ✅ VALIDACIÓN: Verificar que tiene datos de frecuencia
+        if (!ticket.Frequency) {
+          this.logger.warn(`⚠️ Ticket ${ticket.id} no tiene información de frecuencia, omitiendo...`);
+          continue;
+        }
+        
+        let qrBase64: string | undefined;
+        if (includeQR && ticket.qrCode) {
+          try {
+            qrBase64 = await this.generateQRForTicket(ticket.id);
+          } catch (error) {
+            this.logger.warn(`No se pudo generar QR para ticket ${ticket.id}: ${error.message}`);
+          }
+        }
+
+        const ticketHistoryItem: TicketHistoryItem = {
+          id: transaction.id,
+          purchaseDate: transaction.purchaseDate.toISOString(),
+          totalAmount: parseFloat(transaction.finalAmount.toString()),
+          status: transaction.status,
+          paymentMethod: transaction.payment?.method || 'unknown',
+          ticket: {
+            id: ticket.id,
+            qrCode: ticket.qrCode || '',
+            qrBase64,
+            status: ticket.status,
+            passengerCount: ticket.passengerCount,
+            routeInfo: {
+              originCity: ticket.Frequency.originCity?.name || 'N/A',
+              destinationCity: ticket.Frequency.destinationCity?.name || 'N/A',
+              departureTime: ticket.Frequency.departureTime?.toTimeString() || '00:00:00',
+              date: transaction.purchaseDate.toISOString().split('T')[0],
             },
-            passengers: ticket.ticketPassengers.map((tp) => ({
-              id: tp.id,
-              passengerName: `${tp.passenger.firstName} ${tp.passenger.lastName}`,
-              seatNumber: tp.seat.number.toString(),
-              seatType: tp.seatType.toString(),
-              passengerType: tp.passengerType.toString(),
-              finalPrice: parseFloat(tp.finalPrice.toString()),
-            })),
-          };
-        })
-      );
+          },
+          passengers: ticket.ticketPassengers?.map((tp) => ({
+            id: tp.id,
+            passengerName: `${tp.passenger.firstName} ${tp.passenger.lastName}`,
+            seatNumber: tp.seat.number.toString(),
+            seatType: tp.seatType.toString(),
+            passengerType: tp.passengerType.toString(),
+            finalPrice: parseFloat(tp.finalPrice.toString()),
+          })) || [],
+        };
+
+        tickets.push(ticketHistoryItem);
+      }
 
       this.logger.log(`✅ Historial obtenido: ${tickets.length} tickets encontrados`);
 
