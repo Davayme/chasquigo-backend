@@ -24,37 +24,40 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) { }
 
-  @Post('initiate-purchase')
+  @Post('purchase')
   @ApiOperation({
-    summary: '🚀 Iniciar proceso de compra de tickets',
-    description: 'Inicia el proceso de compra creando la transacción y tickets en estado PENDING. Funciona tanto para pagos con Stripe como en efectivo.'
+    summary: '🚀 Iniciar compra de tickets con Stripe',
+    description: 'Crea la transacción, valida asientos, calcula precios y devuelve las keys de Stripe para procesar el pago en el cliente.'
   })
   @ApiBody({ type: InitiatePurchaseDto })
   @ApiResponse({
     status: 201,
-    description: 'Compra iniciada exitosamente',
+    description: 'Transacción creada y keys de Stripe generadas',
     schema: {
       type: 'object',
       properties: {
-        purchaseTransaction: {
+        transaction: {
           type: 'object',
           properties: {
             id: { type: 'number', example: 1 },
-            buyerUserId: { type: 'number', example: 1 },
-            totalAmount: { type: 'number', example: 75.00 },
-            taxAmount: { type: 'number', example: 11.25 },
-            discountAmount: { type: 'number', example: 0.00 },
             finalAmount: { type: 'number', example: 86.25 },
-            status: { type: 'string', example: 'pending' },
-            purchaseDate: { type: 'string', example: '2025-06-29T02:30:00.000Z' }
+            status: { type: 'string', example: 'pending' }
+          }
+        },
+        stripeKeys: {
+          type: 'object',
+          properties: {
+            paymentIntent: { type: 'string', example: 'pi_3MtwBwLkdIwHu7ix28a3tqPa' },
+            paymentIntentClientSecret: { type: 'string', example: 'pi_3MtwBwLkdIwHu7ix28a3tqPa_secret_YWNjdA==' },
+            customerEphemeralKeySecret: { type: 'string', example: 'ek_test_YWNjdA==' },
+            customerId: { type: 'string', example: 'cus_NffrFeUfNV2Hib' },
+            publishableKey: { type: 'string', example: 'pk_test_...' }
           }
         },
         ticket: {
           type: 'object',
           properties: {
             id: { type: 'number', example: 1 },
-            qrCode: { type: 'string', example: 'TKT_1_1719368400000_abc12345' },
-            status: { type: 'string', example: 'PENDING' },
             passengerCount: { type: 'number', example: 3 },
             routeInfo: {
               type: 'object',
@@ -62,23 +65,8 @@ export class TicketsController {
                 routeSheetDetailId: { type: 'number', example: 1 },
                 date: { type: 'string', example: '2025-06-29' },
                 originCity: { type: 'string', example: 'Quito' },
-                destinationCity: { type: 'string', example: 'Guayaquil' },
-                departureTime: { type: 'string', example: '08:30:00' }
+                destinationCity: { type: 'string', example: 'Guayaquil' }
               }
-            }
-          }
-        },
-        passengers: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number', example: 1 },
-              passengerName: { type: 'string', example: 'Juan Pérez' },
-              seatNumber: { type: 'string', example: '1A' },
-              seatType: { type: 'string', example: 'NORMAL' },
-              passengerType: { type: 'string', example: 'NORMAL' },
-              finalPrice: { type: 'number', example: 28.75 }
             }
           }
         }
@@ -86,30 +74,29 @@ export class TicketsController {
     }
   })
   @ApiResponse({ status: 400, description: 'Datos inválidos o asientos no disponibles' })
-  @ApiResponse({ status: 401, description: 'No autorizado' })
   @ApiResponse({ status: 409, description: 'Asientos ya ocupados' })
-  initiatePurchase(@Body() initiatePurchaseDto: InitiatePurchaseDto) {
-    // ✅ CORREGIDO: Obtener buyerUserId del body, no del JWT
-    return this.ticketsService.initiatePurchase(initiatePurchaseDto);
+  async purchaseWithStripe(@Body() initiatePurchaseDto: InitiatePurchaseDto) {
+    return this.ticketsService.createPurchaseWithStripe(initiatePurchaseDto);
   }
 
   @Post('stripe-webhook')
   @ApiOperation({
-    summary: '🔗 Webhook de Stripe para confirmación automática de pagos',
-    description: 'Endpoint que recibe notificaciones de Stripe cuando un pago es exitoso o falla. Confirma o cancela tickets automáticamente.'
+    summary: '🔗 Webhook de Stripe - Confirmación automática de pagos',
+    description: 'Recibe notificaciones de Stripe cuando un pago es exitoso. Confirma el ticket y genera el QR code automáticamente.'
   })
-  @ApiResponse({ status: 200, description: 'Webhook procesado exitosamente' })
-  @ApiResponse({ status: 400, description: 'Webhook inválido' })
-  async handleStripeWebhook(
+  @ApiResponse({ status: 200, description: 'Webhook procesado - Pago confirmado y ticket activado' })
+  @ApiResponse({ status: 400, description: 'Webhook inválido o pago fallido' })
+  async confirmStripePayment(
     @Headers('stripe-signature') signature: string,
     @RawBody() payload: Buffer
   ) {
     try {
-
       const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
       const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
       const event = stripe.webhooks.constructEvent(payload, signature, endpointSecret);
 
+      console.log(`🔗 Webhook Stripe recibido: ${event.type}`);
+      
       return await this.ticketsService.handleStripeWebhook(event);
     } catch (error) {
       console.error('❌ Error processing Stripe webhook:', error);
@@ -150,10 +137,10 @@ export class TicketsController {
     return this.ticketsService.confirmPurchaseCash(confirmCashDto);
   }
 
-  @Get('purchase-status/:purchaseTransactionId')
+  @Get('status/:purchaseTransactionId')
   @ApiOperation({
-    summary: '📊 Consultar estado de compra',
-    description: 'Obtiene el estado actual de una transacción de compra. Útil para polling después de iniciar una compra con Stripe.'
+    summary: '📊 Consultar estado de compra y pago',
+    description: 'Obtiene el estado actual de una transacción. Útil para verificar si el pago de Stripe ya fue procesado.'
   })
   @ApiParam({ name: 'purchaseTransactionId', description: 'ID de la transacción de compra', type: 'number' })
   @ApiResponse({
@@ -162,12 +149,29 @@ export class TicketsController {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'number', example: 1 },
-        status: { type: 'string', example: 'completed' },
-        totalAmount: { type: 'number', example: 86.25 },
-        ticketStatus: { type: 'string', example: 'CONFIRMED' },
-        qrCode: { type: 'string', example: 'TKT_1_1719368400000_abc12345' },
-        paymentMethod: { type: 'string', example: 'Stripe' }
+        transaction: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', example: 1 },
+            status: { type: 'string', example: 'completed' },
+            finalAmount: { type: 'number', example: 86.25 }
+          }
+        },
+        ticket: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', example: 1 },
+            status: { type: 'string', example: 'CONFIRMED' },
+            qrCode: { type: 'string', example: 'TKT_1_1719368400000_abc12345' }
+          }
+        },
+        payment: {
+          type: 'object',
+          properties: {
+            method: { type: 'string', example: 'Stripe' },
+            status: { type: 'string', example: 'completed' }
+          }
+        }
       }
     }
   })
@@ -190,6 +194,43 @@ export class TicketsController {
     @Body() body: { reason?: string }
   ) {
     return this.ticketsService.cancelPurchase(purchaseTransactionId, body.reason || 'Cancelado por usuario');
+  }
+
+  @Post('purchase-cash')
+  @ApiOperation({
+    summary: '💰 Compra directa en efectivo',
+    description: 'Crea y confirma inmediatamente una compra en efectivo. Solo para staff autorizado en oficina.'
+  })
+  @ApiBody({ type: InitiatePurchaseDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Compra en efectivo completada exitosamente',
+    schema: {
+      type: 'object',
+      properties: {
+        transaction: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', example: 1 },
+            finalAmount: { type: 'number', example: 86.25 },
+            status: { type: 'string', example: 'completed' }
+          }
+        },
+        ticket: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', example: 1 },
+            qrCode: { type: 'string', example: 'TKT_1_1719368400000_abc12345' },
+            status: { type: 'string', example: 'CONFIRMED' }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Datos inválidos o asientos no disponibles' })
+  @ApiResponse({ status: 401, description: 'No autorizado - Solo para staff' })
+  async purchaseWithCash(@Body() initiatePurchaseDto: InitiatePurchaseDto) {
+    return this.ticketsService.createPurchaseWithCash(initiatePurchaseDto);
   }
 
 }

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { StripeService } from '../stripe/stripe.service';
 import { InitiatePurchaseDto, PassengerDataDto } from '../tickets/dto/req/passenger-data.dto';
 import { ConfirmCashPaymentDto } from './dto/req/confirm-cash.dto';
 import { PurchaseResponse, PricingCalculation } from '../tickets/dto/res/purcharse-response';
@@ -8,7 +9,10 @@ import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class TicketsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly stripeService: StripeService,
+  ) {}
 
   /**
    * Validar que los asientos estén disponibles
@@ -382,6 +386,167 @@ export class TicketsService {
   }
 
   /**
+   * 🎫 NUEVO: CREAR COMPRA CON STRIPE
+   * Crea la transacción, valida asientos y devuelve keys de Stripe
+   */
+  async createPurchaseWithStripe(initiatePurchaseDto: InitiatePurchaseDto): Promise<any> {
+    const { buyerUserId, routeSheetDetailId, passengers, paymentMethod } = initiatePurchaseDto;
+
+    try {
+      console.log(`🚀 Creando compra Stripe para usuario ${buyerUserId} con ${passengers.length} pasajeros`);
+
+      // 1. Validar disponibilidad de asientos
+      const seatIds = passengers.map(p => p.seatId);
+      const availabilityCheck = await this.validateSeatsAvailability(routeSheetDetailId, seatIds);
+
+      // 2. Calcular precios
+      const pricing = await this.calculateTicketPricing(routeSheetDetailId, passengers);
+
+      // 3. Verificar que el usuario comprador existe
+      const buyerUser = await this.prisma.user.findUnique({
+        where: { id: buyerUserId, isDeleted: false },
+      });
+
+      if (!buyerUser) {
+        throw new BadRequestException(`Usuario comprador con ID ${buyerUserId} no encontrado`);
+      }
+      console.log(`✅ Usuario comprador encontrado: ${buyerUser.firstName} ${buyerUser.lastName}`);
+
+      // 4. Crear/encontrar usuarios para cada pasajero
+      const passengerUsers = await Promise.all(
+        passengers.map(passenger => this.createOrFindUser(passenger))
+      );
+
+      // 5. Crear transacción en base de datos (SIN QR codes aún)
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Crear transacción de compra
+        const purchaseTransaction = await tx.purchaseTransaction.create({
+          data: {
+            buyerUserId,
+            totalAmount: pricing.totals.totalBasePrice,
+            taxAmount: pricing.totals.totalTaxAmount,
+            discountAmount: pricing.totals.totalDiscountAmount,
+            finalAmount: pricing.totals.finalTotalPrice,
+            status: 'pending', // ✅ PENDING hasta que Stripe confirme
+          },
+        });
+
+        // Crear ticket principal (SIN QR code aún)
+        const ticket = await tx.ticket.create({
+          data: {
+            buyerUserId,
+            frequencyId: availabilityCheck.routeSheet.frequencyId,
+            busId: availabilityCheck.routeSheet.busId,
+            totalBasePrice: pricing.totals.totalBasePrice,
+            totalDiscountAmount: pricing.totals.totalDiscountAmount,
+            totalTaxAmount: pricing.totals.totalTaxAmount,
+            finalTotalPrice: pricing.totals.finalTotalPrice,
+            status: TicketStatus.PENDING, // ✅ PENDING hasta confirmación
+            passengerCount: passengers.length,
+            originStopId: availabilityCheck.routeSheet.frequency.originCityId,
+            destinationStopId: availabilityCheck.routeSheet.frequency.destinationCityId,
+            purchaseTransactionId: purchaseTransaction.id,
+            qrCode: null, // ✅ Se generará después del pago
+          },
+        });
+
+        // Crear registros de pasajeros
+        const ticketPassengers = await Promise.all(
+          passengers.map(async (passenger, index) => {
+            const passengerUser = passengerUsers[index];
+            const passengerPricing = pricing.passengers[index];
+            
+            // Obtener el tipo de asiento de la base de datos
+            const seat = availabilityCheck.seats.find(s => s.id === passenger.seatId);
+            if (!seat) {
+              throw new Error(`Asiento ${passenger.seatId} no encontrado`);
+            }
+
+            return await tx.ticketPassenger.create({
+              data: {
+                ticketId: ticket.id,
+                passengerUserId: passengerUser.id,
+                seatId: passenger.seatId,
+                seatType: seat.type, // ✅ Usar el tipo del asiento desde la BD
+                passengerType: passenger.passengerType,
+                basePrice: passengerPricing.basePrice,
+                discountAmount: passengerPricing.discountAmount,
+                taxAmount: passengerPricing.taxAmount,
+                finalPrice: passengerPricing.finalPrice,
+              },
+              include: {
+                passenger: true,
+                seat: true,
+              },
+            });
+          })
+        );
+
+        return {
+          purchaseTransaction,
+          ticket,
+          ticketPassengers,
+          routeInfo: availabilityCheck.routeSheet,
+        };
+      });
+
+      // 6. ✅ NUEVO: Crear PaymentIntent en Stripe
+      const stripeKeys = await this.stripeService.createPaymentIntent(
+        pricing.totals.finalTotalPrice,
+        buyerUser?.email,
+        buyerUserId,
+        { purchaseTransactionId: result.purchaseTransaction.id.toString() } // ✅ Metadata para webhook
+      );
+
+      // 6. ✅ Agregar metadata a la transacción para linking con Stripe
+      await this.prisma.purchaseTransaction.update({
+        where: { id: result.purchaseTransaction.id },
+        data: {
+          // Podemos agregar el PaymentIntent ID como referencia
+          status: `pending_stripe_${stripeKeys.paymentIntent}`,
+        },
+      });
+
+      // 7. Preparar respuesta
+      const response = {
+        transaction: {
+          id: result.purchaseTransaction.id,
+          finalAmount: parseFloat(result.purchaseTransaction.finalAmount.toString()),
+          status: 'pending',
+        },
+        stripeKeys, // ✅ Keys para el cliente móvil
+        ticket: {
+          id: result.ticket.id,
+          passengerCount: result.ticket.passengerCount,
+          routeInfo: {
+            routeSheetDetailId: result.routeInfo.id,
+            date: result.routeInfo.routeSheetHeader?.startDate 
+              ? result.routeInfo.routeSheetHeader.startDate.toISOString().split('T')[0]
+              : new Date().toISOString().split('T')[0],
+            originCity: result.routeInfo.frequency.originCity.name,
+            destinationCity: result.routeInfo.frequency.destinationCity.name,
+          },
+        },
+        passengers: result.ticketPassengers.map(tp => ({
+          id: tp.id,
+          passengerName: `${tp.passenger.firstName} ${tp.passenger.lastName}`,
+          seatNumber: tp.seat.number.toString(),
+          seatType: tp.seatType.toString(),
+          passengerType: tp.passengerType.toString(),
+          finalPrice: parseFloat(tp.finalPrice.toString()),
+        })),
+      };
+
+      console.log(`✅ Compra creada exitosamente: Transaction ${result.purchaseTransaction.id}, PaymentIntent: ${stripeKeys.paymentIntent}`);
+      return response;
+
+    } catch (error) {
+      console.error('❌ Error creating purchase with Stripe:', error);
+      throw error;
+    }
+  }
+
+  /**
    * 💳 CONFIRMAR COMPRA CON STRIPE (llamado por webhook)
    */
   async confirmPurchaseStripe(purchaseTransactionId: number, stripePaymentIntentId: string): Promise<PurchaseResponse> {
@@ -642,6 +807,163 @@ export class TicketsService {
 
     } catch (error) {
       console.error('❌ Error confirming cash purchase:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 💰 NUEVO: CREAR COMPRA DIRECTA EN EFECTIVO
+   * Crea la transacción, valida asientos y confirma inmediatamente
+   */
+  async createPurchaseWithCash(initiatePurchaseDto: InitiatePurchaseDto): Promise<any> {
+    const { buyerUserId, routeSheetDetailId, passengers } = initiatePurchaseDto;
+
+    try {
+      console.log(`💰 Creando compra en efectivo para usuario ${buyerUserId} con ${passengers.length} pasajeros`);
+
+      // 1. Validar disponibilidad de asientos
+      const seatIds = passengers.map(p => p.seatId);
+      const availabilityCheck = await this.validateSeatsAvailability(routeSheetDetailId, seatIds);
+
+      // 2. Calcular precios
+      const pricing = await this.calculateTicketPricing(routeSheetDetailId, passengers);
+
+      // 3. Verificar que el usuario comprador existe
+      const buyerUser = await this.prisma.user.findUnique({
+        where: { id: buyerUserId, isDeleted: false },
+      });
+
+      if (!buyerUser) {
+        throw new BadRequestException(`Usuario comprador con ID ${buyerUserId} no encontrado`);
+      }
+      console.log(`✅ Usuario comprador encontrado: ${buyerUser.firstName} ${buyerUser.lastName}`);
+
+      // 4. Crear/encontrar usuarios para cada pasajero
+      const passengerUsers = await Promise.all(
+        passengers.map(passenger => this.createOrFindUser(passenger))
+      );
+
+      // 5. Crear transacción y confirmar inmediatamente
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Crear transacción de compra
+        const purchaseTransaction = await tx.purchaseTransaction.create({
+          data: {
+            buyerUserId,
+            totalAmount: pricing.totals.totalBasePrice,
+            taxAmount: pricing.totals.totalTaxAmount,
+            discountAmount: pricing.totals.totalDiscountAmount,
+            finalAmount: pricing.totals.finalTotalPrice,
+            status: 'completed', // ✅ Completado inmediatamente para efectivo
+          },
+        });
+
+        // Crear ticket principal con QR inmediatamente
+        const qrCode = this.generateUniqueQR(purchaseTransaction.id); // Usar transaction ID temporalmente
+        const ticket = await tx.ticket.create({
+          data: {
+            buyerUserId,
+            frequencyId: availabilityCheck.routeSheet.frequencyId,
+            busId: availabilityCheck.routeSheet.busId,
+            totalBasePrice: pricing.totals.totalBasePrice,
+            totalDiscountAmount: pricing.totals.totalDiscountAmount,
+            totalTaxAmount: pricing.totals.totalTaxAmount,
+            finalTotalPrice: pricing.totals.finalTotalPrice,
+            status: TicketStatus.CONFIRMED, // ✅ Confirmado inmediatamente
+            passengerCount: passengers.length,
+            originStopId: availabilityCheck.routeSheet.frequency.originCityId,
+            destinationStopId: availabilityCheck.routeSheet.frequency.destinationCityId,
+            purchaseTransactionId: purchaseTransaction.id,
+            qrCode: qrCode,
+          },
+        });
+
+        // Actualizar QR con el ID real del ticket
+        const finalQrCode = this.generateUniqueQR(ticket.id);
+        await tx.ticket.update({
+          where: { id: ticket.id },
+          data: { qrCode: finalQrCode },
+        });
+
+        // Crear registros de pasajeros
+        const ticketPassengers = await Promise.all(
+          passengers.map(async (passenger, index) => {
+            const passengerUser = passengerUsers[index];
+            const passengerPricing = pricing.passengers[index];
+            
+            // Obtener el tipo de asiento de la base de datos
+            const seat = availabilityCheck.seats.find(s => s.id === passenger.seatId);
+            if (!seat) {
+              throw new Error(`Asiento ${passenger.seatId} no encontrado`);
+            }
+
+            return await tx.ticketPassenger.create({
+              data: {
+                ticketId: ticket.id,
+                passengerUserId: passengerUser.id,
+                seatId: passenger.seatId,
+                seatType: seat.type,
+                passengerType: passenger.passengerType,
+                basePrice: passengerPricing.basePrice,
+                discountAmount: passengerPricing.discountAmount,
+                taxAmount: passengerPricing.taxAmount,
+                finalPrice: passengerPricing.finalPrice,
+              },
+              include: {
+                passenger: true,
+                seat: true,
+              },
+            });
+          })
+        );
+
+        return {
+          purchaseTransaction,
+          ticket: { ...ticket, qrCode: finalQrCode },
+          ticketPassengers,
+          routeInfo: availabilityCheck.routeSheet,
+        };
+      });
+
+      // 5. Preparar respuesta
+      const response = {
+        transaction: {
+          id: result.purchaseTransaction.id,
+          finalAmount: parseFloat(result.purchaseTransaction.finalAmount.toString()),
+          status: 'completed',
+        },
+        ticket: {
+          id: result.ticket.id,
+          qrCode: result.ticket.qrCode,
+          status: 'CONFIRMED',
+          passengerCount: result.ticket.passengerCount,
+          routeInfo: {
+            routeSheetDetailId: result.routeInfo.id,
+            date: result.routeInfo.routeSheetHeader?.startDate 
+              ? result.routeInfo.routeSheetHeader.startDate.toISOString().split('T')[0]
+              : new Date().toISOString().split('T')[0],
+            originCity: result.routeInfo.frequency.originCity.name,
+            destinationCity: result.routeInfo.frequency.destinationCity.name,
+          },
+        },
+        passengers: result.ticketPassengers.map(tp => ({
+          id: tp.id,
+          passengerName: `${tp.passenger.firstName} ${tp.passenger.lastName}`,
+          seatNumber: tp.seat.number.toString(),
+          seatType: tp.seatType.toString(),
+          passengerType: tp.passengerType.toString(),
+          finalPrice: parseFloat(tp.finalPrice.toString()),
+        })),
+        payment: {
+          method: 'cash',
+          status: 'completed',
+        },
+      };
+
+      console.log(`✅ Compra en efectivo completada: Ticket ${result.ticket.id}, QR: ${result.ticket.qrCode}`);
+      return response;
+
+    } catch (error) {
+      console.error('❌ Error creating cash purchase:', error);
       throw error;
     }
   }
