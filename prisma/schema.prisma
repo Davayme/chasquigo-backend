@@ -80,7 +80,7 @@ model Cooperative {
   logo        String
   facebook    String?     @map("facebook")
   instagram   String?     @map("instagram")
-  twitter     String?     @map("twitter")
+  X           String?     @map("X")
   website     String?     @map("pagina_web")
   buses       Bus[]
   frequencies Frequency[]
