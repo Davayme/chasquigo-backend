@@ -9,11 +9,11 @@ import {
   ParseIntPipe,
   Query,
 } from '@nestjs/common';
-import { FrequenciesService } from './frequencies.service';
-import { CreateFrequencyDto } from './dto/req/create-frequency.dto';
-import { UpdateFrequencyDto } from './dto/req/update-frequency.dto';
+import { FrequenciesService } from '../services/frequencies.service';
+import { CreateFrequencyDto } from '../dto/req/create-frequency.dto';
+import { UpdateFrequencyDto } from '../dto/req/update-frequency.dto';
 import { ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
-import { SearchRoutesDto } from './dto/req/search-route.dto';
+import { SearchRoutesDto } from '../dto/req/search-route.dto';
 
 @Controller('frequencies')
 export class FrequenciesController {

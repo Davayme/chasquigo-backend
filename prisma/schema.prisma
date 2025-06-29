@@ -71,6 +71,16 @@ enum Status {
   INACTIVE
 }
 
+enum TicketStatus {
+  PENDING // Pendiente de pago
+  PAID // Pagado
+  CONFIRMED // Confirmado
+  BOARDED // Abordado (escaneó QR)
+  USED // Viaje completado
+  CANCELLED // Cancelado
+  EXPIRED // Expirado
+}
+
 model Cooperative {
   id          Int         @id @default(autoincrement()) @map("id")
   name        String      @map("nombre")
@@ -123,16 +133,17 @@ model BusType {
 }
 
 model BusSeat {
-  id        Int          @id @default(autoincrement()) @map("id")
-  busId     Int          @map("id_bus")
-  floor     Int          @map("piso")
-  number    String       @map("numero")
-  type      SeatType     @map("tipo") // normal/VIP
-  location  SeatLocation @map("ubicacion") // pasillo/ventana
-  bus       Bus          @relation(fields: [busId], references: [id])
-  tickets   Ticket[]
-  status    Status       @default(ACTIVE) @map("estado")
-  isDeleted Boolean      @default(false)
+  id              Int               @id @default(autoincrement()) @map("id")
+  busId           Int               @map("id_bus")
+  floor           Int               @map("piso")
+  number          String            @map("numero")
+  type            SeatType          @map("tipo") // normal/VIP
+  location        SeatLocation      @map("ubicacion") // pasillo/ventana
+  bus             Bus               @relation(fields: [busId], references: [id])
+  tickets         Ticket[]
+  status          Status            @default(ACTIVE) @map("estado")
+  isDeleted       Boolean           @default(false)
+  TicketPassenger TicketPassenger[]
 
   @@map("asientos_bus")
 }
@@ -213,9 +224,11 @@ model RoutePrice {
   frequencyId         Int       @unique @map("id_frecuencia")
   normalPrice         Decimal   @map("precio_normal") @db.Decimal(10, 2)
   vipPrice            Decimal   @map("precio_vip") @db.Decimal(10, 2)
-  childDiscount       Decimal   @default(0.5) @map("descuento_nino") @db.Decimal(5, 2) // Porcentaje
-  seniorDiscount      Decimal   @default(0.25) @map("descuento_tercera_edad") @db.Decimal(5, 2)
-  handicappedDiscount Decimal   @default(0.5) @map("descuento_discapacitado") @db.Decimal(5, 2)
+  childDiscount       Decimal   @default(50) @map("descuento_nino") @db.Decimal(5, 2) // Porcentaje
+  seniorDiscount      Decimal   @default(50) @map("descuento_tercera_edad") @db.Decimal(5, 2) // 50% como discapacitados
+  handicappedDiscount Decimal   @default(50) @map("descuento_discapacitado") @db.Decimal(5, 2)
+  includesTax         Boolean   @default(false) @map("incluye_iva") // Si el precio ya incluye IVA
+  taxRate             Decimal   @default(15) @map("tasa_iva") @db.Decimal(5, 2) // 15%
   frequency           Frequency @relation(fields: [frequencyId], references: [id])
   isDeleted           Boolean   @default(false)
 
@@ -223,59 +236,119 @@ model RoutePrice {
 }
 
 model User {
-  id            Int          @id @default(autoincrement()) @map("id")
-  idNumber      String       @map("cedula")
-  documentType  String       @map("tipo_documento") // cedula/pasaporte
-  firstName     String       @map("nombres")
-  lastName      String       @map("apellidos")
-  email         String
-  phone         String       @map("telefono")
-  password      String
-  role          Role         @default(CLIENT) @map("rol")
-  cooperativeId Int?         @map("id_cooperativa")
-  cooperative   Cooperative? @relation(fields: [cooperativeId], references: [id])
-
-  tickets   Ticket[]
-  isDeleted Boolean  @default(false)
+  id                   Int                   @id @default(autoincrement()) @map("id")
+  idNumber             String                @map("cedula")
+  documentType         String                @map("tipo_documento") // cedula/pasaporte
+  firstName            String                @map("nombres")
+  lastName             String                @map("apellidos")
+  email                String
+  phone                String                @map("telefono")
+  password             String? // ✅ NULL = usuario temporal
+  role                 Role                  @default(CLIENT) @map("rol")
+  cooperativeId        Int?                  @map("id_cooperativa")
+  cooperative          Cooperative?          @relation(fields: [cooperativeId], references: [id])
+  purchasedTickets     Ticket[] // Tickets que compró (aparecen en su historial)
+  passengerTickets     TicketPassenger[] // Tickets donde aparece como pasajero
+  purchaseTransactions PurchaseTransaction[]
+  isDeleted            Boolean               @default(false)
 
   @@map("usuarios")
 }
 
+// ✅ NUEVO: Tabla para agrupar compras
+model PurchaseTransaction {
+  id             Int      @id @default(autoincrement()) @map("id")
+  buyerUserId    Int      @map("id_usuario_comprador") // Quien realiza la compra
+  totalAmount    Decimal  @map("monto_total") @db.Decimal(10, 2) // Precio base sin impuestos
+  taxAmount      Decimal  @map("monto_iva") @db.Decimal(10, 2) // IVA 15%
+  discountAmount Decimal  @map("monto_descuento") @db.Decimal(10, 2) // Descuentos aplicados
+  finalAmount    Decimal  @map("monto_final") @db.Decimal(10, 2) // Total a pagar
+  purchaseDate   DateTime @default(now()) @map("fecha_compra")
+  status         String   @map("estado") // pending, completed, cancelled
+
+  // Relaciones
+  buyer     User     @relation(fields: [buyerUserId], references: [id])
+  tickets   Ticket[] // Todos los tickets de esta compra
+  payment   Payment? @relation(fields: [paymentId], references: [id])
+  paymentId Int?     @map("id_pago")
+  isDeleted Boolean  @default(false)
+
+  @@map("transacciones_compra")
+}
+
 model Ticket {
-  id                Int           @id @default(autoincrement()) @map("id")
-  userId            Int           @map("id_usuario")
-  frequencyId       Int           @map("id_frecuencia")
-  busId             Int           @map("id_bus")
-  seatId            Int           @map("id_asiento")
-  seatType          SeatType      @map("tipo_asiento")
-  purchaseDate      DateTime      @map("fecha_compra")
-  passengerType     PassengerType @map("tipo_pasajero")
-  price             Decimal       @map("precio") @db.Decimal(10, 2)
-  discount          Decimal       @map("descuento") @db.Decimal(10, 2)
-  status            Status        @default(ACTIVE) @map("estado")
-  originStopId      Int           @map("parada_origen")
-  destinationStopId Int           @map("parada_destino")
-  paymentId         Int           @map("id_pago")
-  user              User          @relation(fields: [userId], references: [id])
-  frequency         Frequency     @relation(fields: [frequencyId], references: [id])
-  bus               Bus           @relation(fields: [busId], references: [id])
-  seat              BusSeat       @relation(fields: [seatId], references: [id])
-  originStop        City          @relation(fields: [originStopId], references: [id], name: "originStop")
-  destinationStop   City          @relation(fields: [destinationStopId], references: [id], name: "destinationStop")
-  isDeleted         Boolean       @default(false)
-  payment           Payment       @relation(fields: [paymentId], references: [id])
+  id          Int @id @default(autoincrement()) @map("id")
+  buyerUserId Int @map("id_usuario_comprador") // Quien realizó la compra
+  frequencyId Int @map("id_frecuencia")
+  busId       Int @map("id_bus")
+
+  purchaseDate DateTime @default(now()) @map("fecha_compra")
+
+  // ✅ NUEVO: Precios totales del ticket grupal
+  totalBasePrice      Decimal @map("precio_base_total") @db.Decimal(10, 2)
+  totalDiscountAmount Decimal @map("descuento_total") @db.Decimal(10, 2)
+  totalTaxAmount      Decimal @map("iva_total") @db.Decimal(10, 2)
+  finalTotalPrice     Decimal @map("precio_final_total") @db.Decimal(10, 2)
+
+  status            TicketStatus @map("estado")
+  qrCode            String?      @unique @map("codigo_qr")
+  boardingTime      DateTime?    @map("hora_abordaje")
+  scanCount         Int          @default(0) @map("veces_escaneado")
+  lastScanTime      DateTime?    @map("ultima_escaneada")
+  passengerCount    Int          @map("cantidad_pasajeros")
+  originStopId      Int          @map("parada_origen")
+  destinationStopId Int          @map("parada_destino")
+
+  // Relaciones
+  buyer            User              @relation(fields: [buyerUserId], references: [id])
+  originStop       City              @relation(fields: [originStopId], references: [id], name: "originStop")
+  destinationStop  City              @relation(fields: [destinationStopId], references: [id], name: "destinationStop")
+  ticketPassengers TicketPassenger[]
+
+  purchaseTransaction   PurchaseTransaction? @relation(fields: [purchaseTransactionId], references: [id])
+  purchaseTransactionId Int?                 @map("id_transaccion")
+
+  isDeleted Boolean   @default(false)
+  BusSeat   BusSeat?  @relation(fields: [busSeatId], references: [id])
+  busSeatId Int?
+  Bus       Bus       @relation(fields: [busId], references: [id])
+  Frequency Frequency @relation(fields: [frequencyId], references: [id])
 
   @@map("boletos")
 }
 
+model TicketPassenger {
+  id              Int           @id @default(autoincrement()) @map("id")
+  ticketId        Int           @map("id_boleto")
+  passengerUserId Int           @map("id_usuario_pasajero")
+  seatId          Int           @map("id_asiento")
+  seatType        SeatType      @map("tipo_asiento")
+  passengerType   PassengerType @map("tipo_pasajero")
+  basePrice       Decimal       @map("precio_base") @db.Decimal(10, 2)
+  discountAmount  Decimal       @map("descuento") @db.Decimal(10, 2)
+  taxAmount       Decimal       @map("iva") @db.Decimal(10, 2)
+  finalPrice      Decimal       @map("precio_final") @db.Decimal(10, 2)
+  ticket          Ticket        @relation(fields: [ticketId], references: [id])
+  passenger       User          @relation(fields: [passengerUserId], references: [id])
+  seat            BusSeat       @relation(fields: [seatId], references: [id])
+
+  isDeleted Boolean @default(false)
+
+  @@map("boletos_pasajeros")
+}
+
+// ✅ ACTUALIZADO: Payment con relación a transacciones
 model Payment {
-  id        Int      @id @default(autoincrement()) @map("id")
-  method    String   @default("Stripe") @map("metodo") // Stripe
-  amount    Decimal  @default(0) @map("monto") @db.Decimal(10, 2)
-  status    String   @map("estado")
-  date      DateTime @map("fecha")
-  isDeleted Boolean  @default(false)
-  tickets   Ticket[]
+  id              Int      @id @default(autoincrement()) @map("id")
+  method          String   @default("Stripe") @map("metodo") // Stripe, efectivo, etc.
+  amount          Decimal  @default(0) @map("monto") @db.Decimal(10, 2)
+  status          String   @map("estado") // pending, completed, failed
+  date            DateTime @map("fecha")
+  stripePaymentId String?  @map("stripe_payment_id") // ID de Stripe para referencia
+  isDeleted       Boolean  @default(false)
+
+  // ✅ NUEVO: Relación con transacciones
+  purchaseTransactions PurchaseTransaction[]
 
   @@map("pagos")
 }

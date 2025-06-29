@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { CreateFrequencyDto } from './dto/req/create-frequency.dto';
-import { UpdateFrequencyDto } from './dto/req/update-frequency.dto';
+import { CreateFrequencyDto } from '../dto/req/create-frequency.dto';
+import { UpdateFrequencyDto } from '../dto/req/update-frequency.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PrismaErrorHandler } from 'src/common/filters/prisma-errors';
-import { RouteSearchResponse } from './dto/res/route-search-response';
-import { SearchRoutesDto } from './dto/req/search-route.dto';
+import { RouteSearchResponse } from '../dto/res/route-search-response';
+import { SearchRoutesDto } from '../dto/req/search-route.dto';
 
 @Injectable()
 export class FrequenciesService {

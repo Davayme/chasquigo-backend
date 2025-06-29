@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { PrismaClient, Province, Role, DocumentType, SeatType, SeatLocation, Status } from '@prisma/client';
+import { PrismaClient, Province, Role, DocumentType, SeatType, SeatLocation, Status, TicketStatus, PassengerType } from '@prisma/client';
 import { hash } from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -33,14 +33,18 @@ function generateBusSeats(floor: number, rows: number, seatsPerRow: number, star
 
 async function main() {
   // Limpiar datos existentes (ten cuidado en producción)
-  Logger.log('Limpiando datos existentes...');
+  Logger.log('🧹 Limpiando datos existentes...');
+  await prisma.ticketPassenger.deleteMany({});
+  await prisma.payment.deleteMany({});
+  await prisma.purchaseTransaction.deleteMany({});
   await prisma.ticket.deleteMany({});
   await prisma.routeSheetDetail.deleteMany({});
   await prisma.routeSheetHeader.deleteMany({});
-  await prisma.intermediateStop.deleteMany({});
   await prisma.routePrice.deleteMany({});
+  await prisma.intermediateStop.deleteMany({});
   await prisma.frequency.deleteMany({});
   await prisma.busSeat.deleteMany({});
+  await prisma.busType.deleteMany({});
   await prisma.bus.deleteMany({});
   await prisma.busType.deleteMany({});
   await prisma.user.deleteMany({});
@@ -57,7 +61,7 @@ async function main() {
     prisma.city.create({ data: { name: 'Manta', province: Province.MANABI } }),
     prisma.city.create({ data: { name: 'Ambato', province: Province.TUNGURAHUA } }),
     prisma.city.create({ data: { name: 'Riobamba', province: Province.CHIMBORAZO } }),
-    prisma.city.create({ data: { name: 'Ibarra', province: Province.IMBABURA } }),
+    prisma.city.create({ data: { name: 'Machala', province: Province.EL_ORO } }),
     prisma.city.create({ data: { name: 'Esmeraldas', province: Province.ESMERALDAS } }),
     prisma.city.create({ data: { name: 'Loja', province: Province.LOJA } })
   ]);
@@ -285,9 +289,11 @@ async function main() {
       frequencyId: frequency1.id,
       normalPrice: 4.00,
       vipPrice: 6.00,
-      childDiscount: 0.5,
-      seniorDiscount: 0.25,
-      handicappedDiscount: 0.5,
+      childDiscount: 50.0,
+      seniorDiscount: 25.0,
+      handicappedDiscount: 30.0,
+      taxRate: 15.0,
+      includesTax: false
     }
   });
   
@@ -296,9 +302,11 @@ async function main() {
       frequencyId: frequency2.id,
       normalPrice: 2.00,
       vipPrice: 3.00,
-      childDiscount: 0.5,
-      seniorDiscount: 0.25,
-      handicappedDiscount: 0.5,
+      childDiscount: 50.0,
+      seniorDiscount: 25.0,
+      handicappedDiscount: 30.0,
+      taxRate: 15.0,
+      includesTax: false
     }
   });
   
@@ -307,9 +315,11 @@ async function main() {
       frequencyId: frequency3.id,
       normalPrice: 2.00,
       vipPrice: 3.00,
-      childDiscount: 0.5,
-      seniorDiscount: 0.25,
-      handicappedDiscount: 0.5,
+      childDiscount: 50.0,
+      seniorDiscount: 25.0,
+      handicappedDiscount: 30.0,
+      taxRate: 15.0,
+      includesTax: false
     }
   });
 
@@ -318,9 +328,11 @@ async function main() {
       frequencyId: frequency4.id,
       normalPrice: 2.00,
       vipPrice: 3.00,
-      childDiscount: 0.5,
-      seniorDiscount: 0.25,
-      handicappedDiscount: 0.5,
+      childDiscount: 50.0,
+      seniorDiscount: 25.0,
+      handicappedDiscount: 30.0,
+      taxRate: 15.0,
+      includesTax: false
     }
   });
   
@@ -391,166 +403,126 @@ async function main() {
   // Hashear contraseña común para usuarios de prueba
   const passwordHash = await hash('admin4566', 10);
 
-  // Crear usuarios para cada rol
-  Logger.log('Creando usuarios...');
-  await Promise.all([
-    // Admin
+  const users = await Promise.all([
+    // 🔑 Administradores
     prisma.user.create({
       data: {
         idNumber: '1805472386',
-        documentType: DocumentType.CEDULA,
-        firstName: 'Admin',
-        lastName: 'Sistema',
+        documentType: 'cedula', // ✅ String según tu esquema
+        firstName: 'David',
+        lastName: 'Administrador',
         email: 'admin@chasquigo.com',
         password: passwordHash,
-        phone: '0999999999',
+        phone: '0999123456',
         role: Role.ADMIN,
         cooperativeId: cooperatives[0].id
       }
     }),
     prisma.user.create({
       data: {
-        idNumber: '1805271937',
-        documentType: DocumentType.CEDULA,
-        firstName: 'Admin',
-        lastName: 'Sistema',
-        email: 'admin2@chasquigo.com',
+        idNumber: '0928374651',
+        documentType: 'cedula',
+        firstName: 'María',
+        lastName: 'Supervisor',
+        email: 'supervisor@andinos.com',
+        password: passwordHash,
+        phone: '0987654321',
+        role: Role.ADMIN,
+        cooperativeId: cooperatives[1].id
+      }
+    }),
+
+    // 🚗 Conductores
+    prisma.user.create({
+      data: {
+        idNumber: '1712345678',
+        documentType: 'cedula',
+        firstName: 'Carlos',
+        lastName: 'Conductor',
+        email: 'carlos.conductor@chasquigo.com',
+        password: passwordHash,
+        phone: '0995555111',
+        role: Role.DRIVER,
+        cooperativeId: cooperatives[0].id
+      }
+    }),
+    prisma.user.create({
+      data: {
+        idNumber: '0987654320', // ✅ Diferente para evitar duplicados
+        documentType: 'cedula',
+        firstName: 'Ana',
+        lastName: 'Conductora',
+        email: 'ana.conductora@andinos.com',
+        password: passwordHash,
+        phone: '0966666222',
+        role: Role.DRIVER,
+        cooperativeId: cooperatives[1].id
+      }
+    }),
+
+    // 👥 Clientes para testing
+    prisma.user.create({
+      data: {
+        idNumber: '1234567890',
+        documentType: 'cedula',
+        firstName: 'Juan',
+        lastName: 'Pérez',
+        email: 'juan.perez@email.com',
+        password: passwordHash,
+        phone: '0987123456',
+        role: Role.CLIENT,
+      }
+    }),
+    prisma.user.create({
+      data: {
+        idNumber: '0987654322', // ✅ Diferente
+        documentType: 'cedula',
+        firstName: 'María',
+        lastName: 'González',
+        email: 'maria.gonzalez@email.com',
         password: passwordHash,
         phone: '0976543210',
-        role: Role.ADMIN,
-        cooperativeId: cooperatives[0].id
+        role: Role.CLIENT,
       }
     }),
     prisma.user.create({
       data: {
-        idNumber: '1805359203',
-        documentType: DocumentType.CEDULA,
-        firstName: 'Admin',
-        lastName: 'Sistema',
-        email: 'admin3@chasquigo.com',
-        password: passwordHash,
-        phone: '0976543210',
-        role: Role.ADMIN,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    prisma.user.create({
-      data: {
-        idNumber: '1805465489',
-        documentType: DocumentType.CEDULA,
-        firstName: 'Admin',
-        lastName: 'Sistema',
-        email: 'admin4@chasquigo.com',
-        password: passwordHash,
-        phone: '0976543210',
-        role: Role.ADMIN,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    prisma.user.create({
-      data: {
-        idNumber: '1850137918',
-        documentType: DocumentType.CEDULA,
-        firstName: 'Admin',
-        lastName: 'Sistema',
-        email: 'admin5@chasquigo.com',
-        password: passwordHash,
-        phone: '0976543210',
-        role: Role.ADMIN,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    
-    // Drivers
-    prisma.user.create({
-      data: {
-        idNumber: '1805472386001',
-        documentType: DocumentType.RUC,
-        firstName: 'Driver',
-        lastName: 'Sistema',
-        email: 'driver1@chasquigo.com',
-        password: passwordHash,
-        phone: '0987654321',
-        role: Role.DRIVER,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    prisma.user.create({
-      data: {
-        idNumber: '1805271937001',
-        documentType: DocumentType.RUC,
-        firstName: 'Driver',
-        lastName: 'Sistema',
-        email: 'driver2@chasquigo.com',
-        password: passwordHash,
-        phone: '0987654321',
-        role: Role.DRIVER,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    prisma.user.create({
-      data: {
-        idNumber: '1805359203001',
-        documentType: DocumentType.RUC,
-        firstName: 'Driver',
-        lastName: 'Sistema',
-        email: 'driver3@chasquigo.com',
-        password: passwordHash,
-        phone: '0987654321',
-        role: Role.DRIVER,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    prisma.user.create({
-      data: {
-        idNumber: '1850137918001',
-        documentType: DocumentType.RUC,
-        firstName: 'Driver',
-        lastName: 'Sistema',
-        email: 'driver4@chasquigo.com',
-        password: passwordHash,
-        phone: '0987654321',
-        role: Role.DRIVER,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    prisma.user.create({
-      data: {
-        idNumber: '1805465489001',
-        documentType: DocumentType.RUC,
-        firstName: 'Driver',
-        lastName: 'Sistema',
-        email: 'driver5@chasquigo.com',
-        password: passwordHash,
-        phone: '0987654321',
-        role: Role.DRIVER,
-        cooperativeId: cooperatives[0].id
-      }
-    }),
-    
-    // Clientes
-    prisma.user.create({
-      data: {
-        idNumber: '9999999999',
-        documentType: DocumentType.CEDULA,
-        firstName: 'CONSUMIDOR',
-        lastName: 'FINAL',
-        email: 'consumidorfinal@chasquigo.com',
+        idNumber: '1122334455',
+        documentType: 'cedula',
+        firstName: 'Pedro',
+        lastName: 'Rodríguez',
+        email: 'pedro.rodriguez@email.com',
         password: passwordHash,
         phone: '0965432109',
         role: Role.CLIENT,
       }
     }),
+
+    // 🧑‍💼 Staff para confirmar pagos en efectivo
     prisma.user.create({
       data: {
-        idNumber: '9999999999999',
-        documentType: DocumentType.RUC,
-        firstName: 'CONSUMIDOR',
-        lastName: 'FINAL',
-        email: 'consumidorfinal@chasquigo.com',
+        idNumber: '1805123456',
+        documentType: 'cedula',
+        firstName: 'Luis',
+        lastName: 'Vendedor',
+        email: 'vendedor@chasquigo.com',
         password: passwordHash,
-        phone: '0954321098',
-        role: Role.CLIENT,
+        phone: '0977777333',
+        role: Role.WORKER,
+        cooperativeId: cooperatives[0].id
+      }
+    }),
+    prisma.user.create({
+      data: {
+        idNumber: '0912345678',
+        documentType: 'cedula',
+        firstName: 'Carmen',
+        lastName: 'Vendedora',
+        email: 'vendedora@andinos.com',
+        password: passwordHash,
+        phone: '0988888444',
+        role: Role.WORKER,
+        cooperativeId: cooperatives[1].id
       }
     })
   ]);
@@ -578,11 +550,122 @@ async function main() {
   console.log('Cliente: cliente@chasquigo.com / admin4566');
   
   Logger.log('¡Datos de prueba creados exitosamente!');
+
+
+  // ========================================
+  // 🎫 CREAR ALGUNOS TICKETS DE EJEMPLO
+  // ========================================
+  Logger.log('🎫 Creando tickets de ejemplo...');
+  
+  const exampleTickets = await Promise.all([
+    // Ticket 1: Juan Pérez en Quito → Guayaquil 08:30
+    prisma.purchaseTransaction.create({
+      data: {
+        buyerUserId: users[4].id, // Juan Pérez
+        totalAmount: 25.00,
+        taxAmount: 3.75,
+        discountAmount: 0.00,
+        finalAmount: 28.75,
+        status: 'completed',
+      }
+    }).then(async (transaction) => {
+      const ticket = await prisma.ticket.create({
+        data: {
+          buyerUserId: users[4].id,
+          busId: buses[0].id,
+          frequencyId: frequency1.id,
+          totalBasePrice: 25.00,
+          totalDiscountAmount: 0.00,
+          totalTaxAmount: 3.75,
+          finalTotalPrice: 28.75,
+          status: TicketStatus.CONFIRMED, // ✅ Usar enum
+          passengerCount: 1,
+          originStopId: cities[0].id,
+          destinationStopId: cities[1].id,
+          purchaseTransactionId: transaction.id,
+          qrCode: `TKT_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`, // ✅ substring en lugar de substr
+        }
+      });
+
+      // Crear pasajero para este ticket
+      const firstSeat = await prisma.busSeat.findFirst({
+        where: { busId: buses[0].id, number: '1A' }
+      });
+
+      await prisma.ticketPassenger.create({
+        data: {
+          ticketId: ticket.id,
+          passengerUserId: users[4].id,
+          seatId: firstSeat!.id,
+          seatType: SeatType.VIP, // ✅ Usar enum
+          passengerType: PassengerType.NORMAL, // ✅ Usar enum
+          basePrice: 35.00,
+          discountAmount: 0.00,
+          taxAmount: 5.25,
+          finalPrice: 40.25,
+        }
+      });
+
+      return ticket;
+    }),
+
+    // Ticket 2: María González en Guayaquil → Cuenca
+    prisma.purchaseTransaction.create({
+      data: {
+        buyerUserId: users[5].id, // María González
+        totalAmount: 18.00,
+        taxAmount: 2.70,
+        discountAmount: 0.00,
+        finalAmount: 20.70,
+        status: 'completed',
+      }
+    }).then(async (transaction) => {
+      const ticket = await prisma.ticket.create({
+        data: {
+          buyerUserId: users[5].id,
+          busId: buses[2].id,
+          frequencyId: frequency2.id,
+          totalBasePrice: 18.00,
+          totalDiscountAmount: 0.00,
+          totalTaxAmount: 2.70,
+          finalTotalPrice: 20.70,
+          status: TicketStatus.CONFIRMED,
+          passengerCount: 1,
+          originStopId: cities[1].id,
+          destinationStopId: cities[2].id,
+          purchaseTransactionId: transaction.id,
+          qrCode: `TKT_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        }
+      });
+
+      const firstNormalSeat = await prisma.busSeat.findFirst({
+        where: { busId: buses[2].id, type: SeatType.NORMAL }
+      });
+
+      await prisma.ticketPassenger.create({
+        data: {
+          ticketId: ticket.id,
+          passengerUserId: users[5].id,
+          seatId: firstNormalSeat!.id,
+          seatType: SeatType.NORMAL,
+          passengerType: PassengerType.NORMAL,
+          basePrice: 18.00,
+          discountAmount: 0.00,
+          taxAmount: 2.70,
+          finalPrice: 20.70,
+        }
+      });
+
+      return ticket;
+    })
+  ]);
+
+
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error('❌ Error en la semilla:', e);
     process.exit(1);
   })
   .finally(async () => {
