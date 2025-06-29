@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+/* import { Module } from '@nestjs/common';
 import { QrService } from './qr.service';
 import { QrController } from './qr.controller';
 import { CommonModule } from 'src/common/common.module';
@@ -11,3 +11,4 @@ import { QrDemoService } from './qr.demo.service';
   exports: [QrService, QrDemoService]
 })
 export class QrModule {}
+ */

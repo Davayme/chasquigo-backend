@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+/* import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import * as QRCode from 'qrcode';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,11 +9,6 @@ export class QrService {
 
     constructor(private readonly prisma: PrismaService) { }
 
-    /**
-     * Genera un código QR a partir de los datos proporcionados
-     * @param data Datos para codificar en el QR
-     * @returns Imagen QR en formato base64
-     */
     async generateQRCode(data: string): Promise<string> {
         try {
             // Opciones para personalizar el QR
@@ -39,11 +34,7 @@ export class QrService {
         }
     }
 
-    /**
-     * Genera un QR como un buffer PNG
-     * @param data Datos para codificar en el QR
-     * @returns Buffer con la imagen PNG
-     */
+
     async generateQRBuffer(data: string): Promise<Buffer> {
         try {
             const buffer = await QRCode.toBuffer(data, {
@@ -60,12 +51,7 @@ export class QrService {
         }
     }
 
-    /**
-     * Genera un QR para un boleto específico
-     * @param ticketId ID del boleto
-     * @param format Formato deseado del QR (base64 o png)
-     * @returns QR como string base64 o como buffer PNG
-     */
+
     async getTicketQR(ticketId: number, format: 'base64' | 'png' = 'base64'): Promise<string | Buffer> {
         // Buscar el boleto en la base de datos
         const ticket = await this.prisma.ticket.findUnique({
@@ -125,12 +111,7 @@ export class QrService {
         }
     }
 
-    /**
-     * Valida un boleto escaneado usando su ID y hash
-     * @param ticketId ID del boleto
-     * @param hash Hash de validación del QR
-     * @returns Objeto con información de validación
-     */
+
     async validateTicket(ticketId: number, hash: string): Promise<{
         isValid: boolean;
         ticketId: number;
@@ -182,11 +163,6 @@ export class QrService {
         };
     }
 
-    /**
-     * Genera un hash seguro para un boleto
-     * @param ticket Objeto del boleto
-     * @returns Hash HMAC-SHA256
-     */
     private generateTicketHash(ticket: any): string {
         const secret = process.env.QR_SECRET || 'chasquigo-secret-key';
         return crypto
@@ -197,4 +173,4 @@ export class QrService {
 
     /////////////////////////////////
     
-}
+} */
