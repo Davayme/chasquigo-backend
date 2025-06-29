@@ -16,11 +16,12 @@ export class BusSeatDto {
 
   @ApiProperty({
     description: 'Número o identificador del asiento',
-    example: '1A'
+    example: 1
   })
-  @IsString()
-  @IsNotEmpty()
-  number: string;
+  @IsInt()
+  @Min(1)
+  @Max(99)
+  number: number;
 
   @ApiProperty({
     description: 'Tipo de asiento',
