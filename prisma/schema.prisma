@@ -61,8 +61,10 @@ enum SeatType {
 }
 
 enum SeatLocation {
-  WINDOW
-  AISLE
+  WINDOW_LEFT
+  WINDOW_RIGHT
+  AISLE_LEFT
+  AISLE_RIGHT
   MIDDLE
 }
 
@@ -136,7 +138,7 @@ model BusSeat {
   id              Int               @id @default(autoincrement()) @map("id")
   busId           Int               @map("id_bus")
   floor           Int               @map("piso")
-  number          String            @map("numero")
+  number          Int               @map("numero")
   type            SeatType          @map("tipo") // normal/VIP
   location        SeatLocation      @map("ubicacion") // pasillo/ventana
   bus             Bus               @relation(fields: [busId], references: [id])
