@@ -10,6 +10,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'debug', 'log', 'verbose'],
   });
+  app.use('/tickets/stripe-webhook', express.raw({ type: 'application/json' }));
   // Configurar el adaptador HTTP
   const httpAdapter = app.getHttpAdapter();
   const expressApp = httpAdapter.getInstance();

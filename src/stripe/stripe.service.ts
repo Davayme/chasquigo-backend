@@ -15,7 +15,7 @@ export class StripeService {
     });
   }
 
-  async createPaymentIntent(amount: number, userEmail?: string, userId?: number) {
+  async createPaymentIntent(amount: number, userEmail?: string, userId?: number, metadata?: Record<string, string>) {
     try {
       // Crear un cliente
       const customerData: Stripe.CustomerCreateParams = {
@@ -45,6 +45,7 @@ export class StripeService {
         metadata: {
           userId: userId?.toString(),
           applicationFee: 'Chasquigo',
+          ...metadata, // ✅ Metadata adicional del servicio
         },
       });
 

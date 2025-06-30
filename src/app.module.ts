@@ -13,15 +13,16 @@ import { TicketsModule } from './tickets/tickets.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { AwsModule } from './aws/aws.module';
 import { DriversModule } from './drivers/drivers.module';
+import { DriverTripsModule } from './driver-trips/driver-trips.module';
 
 
 @Module({
   imports: [
-    UsersModule, 
-    CooperativesModule, 
-    CommonModule, 
-    AuthModule, 
-    BusesModule, 
+    UsersModule,
+    CooperativesModule,
+    CommonModule,
+    AuthModule,
+    BusesModule,
     StripeModule,
     FrequenciesModule,
     CitiesModule,
@@ -30,9 +31,10 @@ import { DriversModule } from './drivers/drivers.module';
     TicketsModule,
     CloudinaryModule,
     AwsModule,
-    DriversModule
+    DriversModule,
+    DriverTripsModule
   ],
   controllers: [],
   providers: [],
 })
-export class AppModule {}
+export class AppModule { }
