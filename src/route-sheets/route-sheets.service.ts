@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreateRouteSheetDto } from './dto/req/create-route-sheet.dto';
 import { UpdateRouteSheetDto } from './dto/req/update-route-sheet.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -44,22 +44,35 @@ export class RouteSheetsService {
     const orderedFrequencies = this.orderFrequenciesCyclically(frequencies);
     
     // Asignar buses a frecuencias de manera cíclica
-    const routeSheetDetails = busIds.map((busId, index) => {
+    const routeSheetDetails = busIds.map(async (busId, index) => {
       // Usar el operador módulo para volver al inicio del array de frecuencias
       const frequencyIndex = index % orderedFrequencies.length;
       const frequency = orderedFrequencies[frequencyIndex];
       
+      const existOne = await this.prisma.routeSheetDetail.findFirst({
+        where: {
+          routeSheetHeaderId: header.id,
+          frequencyId: frequency.id,
+        },
+      });
+
+      let status : Status = Status.ACTIVE;
+
+      if (existOne) {
+        status = Status.INACTIVE;
+      }
+
       return {
         routeSheetHeaderId: header.id,
         busId,
         frequencyId: frequency.id,
-        status: Status.ACTIVE,
+        status,
       };
     });
     
     // Crear los detalles de la hoja de ruta en la base de datos
     await this.prisma.routeSheetDetail.createMany({
-      data: routeSheetDetails,
+      data: await Promise.all(routeSheetDetails),
     });
     
     // Obtener el header con los detalles recién creados
@@ -230,12 +243,13 @@ export class RouteSheetsService {
   async getBusForFrequencyOnDate(getFrequenciesDto: GetFrequenciesDto) {
     // Obtener el encabezado con los detalles iniciales
     const routeSheet = await this.prisma.routeSheetHeader.findUnique({
-      where: { id: getFrequenciesDto.routeSheetHeaderId },
+      where: { id: getFrequenciesDto.routeSheetHeaderId, status: Status.ACTIVE},
       include: {
         routeSheetDetails: {
+          where: { status: Status.ACTIVE },
           include: {
             bus: true,
-            frequency: true,
+            frequency: true, 
           },
         },
       },
@@ -278,10 +292,8 @@ export class RouteSheetsService {
     
     // Calcular la diferencia en días entre la fecha objetivo y la fecha de inicio
     const startDate = new Date(routeSheet.startDate);
-    startDate.setHours(0, 0, 0, 0);
     
     const endDate = new Date(getFrequenciesDto.targetDate);
-    endDate.setHours(0, 0, 0, 0);
     
     const diffTime = endDate.getTime() - startDate.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
@@ -292,37 +304,39 @@ export class RouteSheetsService {
     // Determinar cuántos ciclos completos de frecuencias han pasado
     const fullCycles = Math.floor(diffDays / totalFrequencies);
     
-    // Determinar la posición en el ciclo actual (0 a totalFrequencies-1)
-    const positionInCycle = diffDays % totalFrequencies;
-    
-    // Determinar qué buses están activos en este ciclo
-    const activeBuses = [];
-    const waitingBuses = [];
-    
-    // Los primeros N buses (donde N = totalFrequencies) están activos en el ciclo 0
-    // Luego rotan los buses adicionales en ciclos posteriores
+    // Determinar cuántos grupos de buses necesitamos (cada grupo contiene tantos buses como frecuencias)
     const busesPerCycle = Math.min(totalBuses, totalFrequencies);
+    const totalCycles = Math.ceil(totalBuses / busesPerCycle);
     
-    // Calcular el desplazamiento del ciclo actual
-    const cycleOffset = fullCycles % Math.ceil(totalBuses / busesPerCycle);
+    // Determinar en qué ciclo estamos actualmente
+    const currentCycle = Math.floor(diffDays / busesPerCycle);
     
     // Determinar qué buses están activos en este ciclo
+    const activeBuses: any[] = [];
+    const waitingBuses: any[] = [];
+    
+    // Calcular el índice de inicio para los buses activos
+    const startIndex = (currentCycle * busesPerCycle) % totalBuses;
+    
+    // Seleccionar los buses activos para este ciclo
     for (let i = 0; i < totalBuses; i++) {
-      const cycleGroup = Math.floor(i / busesPerCycle);
-      const isActive = cycleGroup === (cycleOffset % Math.ceil(totalBuses / busesPerCycle));
-      
-      if (isActive) {
-        activeBuses.push(sortedBuses[i]);
+      const busIndex = (startIndex + i) % totalBuses;
+      if (i < busesPerCycle) {
+        activeBuses.push(sortedBuses[busIndex]);
       } else {
-        waitingBuses.push(sortedBuses[i]);
+        waitingBuses.push(sortedBuses[busIndex]);
       }
     }
     
     // Para los buses activos, determinar su frecuencia actual
     const busAssignments = new Map<number, number>();
     
+    // Calcular el desplazamiento de frecuencia basado en los días transcurridos
+    const frequencyOffset = diffDays % totalFrequencies;
+    
+    // Asignar frecuencias a los buses activos
     activeBuses.forEach((bus, index) => {
-      const freqIndex = (index + fullCycles) % totalFrequencies;
+      const freqIndex = (index + frequencyOffset) % totalFrequencies;
       busAssignments.set(bus.id, allFrequencies[freqIndex]);
     });
     
@@ -354,33 +368,152 @@ export class RouteSheetsService {
         activeBuses: activeBuses.map(b => b.id),
         waitingBuses: waitingBuses.map(b => b.id),
         fullCycles,
-        positionInCycle,
-        cycleOffset,
-        busesPerCycle
+        currentCycle,
+        frequencyOffset,
+        busesPerCycle,
+        startIndex
       }
     };
   }
 
-  /**
-   * Obtiene el horario de asignación de buses para un rango de fechas
-   * @param routeSheetHeaderId ID de la hoja de ruta
-   * @param startDate Fecha de inicio del rango
-   * @param endDate Fecha de fin del rango
-   * @returns Un objeto con las asignaciones por día
-   */
-  async getRouteSheetSchedule(
-    dto: GetRouteSheetScheduleDto
-  ) {
-    // Validar fechas
+
+  // async getRouteSheetSchedule(
+  //   dto: GetRouteSheetScheduleDto
+  // ) {
+  //   if (dto.startDate > dto.endDate) {
+  //     throw new BadRequestException('La fecha de inicio no puede ser posterior a la fecha de fin');
+  //   }
+  
+  //   // Obtener las frecuencias únicas de la hoja de ruta
+  //   const routeSheet = await this.prisma.routeSheetHeader.findUnique({
+  //     where: { id: dto.routeSheetHeaderId },
+  //     include: {
+  //       routeSheetDetails: {
+  //         include: {
+  //           bus: true,
+  //           frequency: {
+  //             include: {
+  //               originCity: true,
+  //               destinationCity: true,
+  //             },
+  //           },
+  //         },
+  //       },
+  //     },
+  //   });
+  
+  //   if (!routeSheet) {
+  //     throw new NotFoundException(`Hoja de ruta con ID ${dto.routeSheetHeaderId} no encontrada`);
+  //   }
+  
+  //   // Obtener todas las frecuencias únicas
+  //   const allFrequencies = [
+  //     ...new Map(routeSheet.routeSheetDetails.map(d => [d.frequency.id, d.frequency])).values()
+  //   ].sort((a, b) => a.id - b.id);
+  
+  //   if (allFrequencies.length === 0) {
+  //     throw new Error('No hay frecuencias asignadas a esta hoja de ruta');
+  //   }
+  
+  //   // Obtener todos los buses únicos
+  //   const allBuses = [
+  //     ...new Map(routeSheet.routeSheetDetails.map(d => [d.bus.id, d.bus])).values()
+  //   ].sort((a, b) => a.id - b.id);
+  
+  //   const totalBuses = allBuses.length;
+  //   const totalFrequencies = allFrequencies.length;
+  //   const busesPerCycle = Math.min(totalBuses, totalFrequencies);
+  
+  //   // Calcular la fecha de inicio de la hoja de ruta
+  //   const routeStartDate = new Date(routeSheet.startDate);
+  //   routeStartDate.setHours(0, 0, 0, 0);
+  
+  //   // Ajustar las fechas de inicio y fin
+  //   const start = new Date(dto.startDate);
+  //   const end = new Date(dto.endDate);
+  //   end.setHours(23, 59, 59, 999);
+  
+  //   // Calcular diferencia en días desde el inicio de la hoja de ruta
+  //   const diffTimeStart = start.getTime() - routeStartDate.getTime();
+  //   const startDayOffset = Math.max(0, Math.floor(diffTimeStart / (1000 * 60 * 60 * 24)));
+  
+  //   // Generar el horario para cada día
+  //   const schedule = [];
+  //   const currentDate = new Date(start);
+    
+  //   while (currentDate <= end) {
+  //     const dayOfWeek = currentDate.toLocaleDateString('es-ES', { weekday: 'long' });
+  //     const daySchedule = {
+  //       date: new Date(currentDate),
+  //       dayOfWeek: dayOfWeek,
+  //       assignments: []
+  //     };
+  
+  //     // Calcular días desde el inicio de la hoja de ruta
+  //     const diffTime = currentDate.getTime() - routeStartDate.getTime();
+  //     const daysFromStart = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      
+  //     if (daysFromStart < 0) {
+  //       // Si la fecha es anterior al inicio de la hoja de ruta, saltar al siguiente día
+  //       currentDate.setDate(currentDate.getDate() + 1);
+  //       continue;
+  //     }
+  
+  //     // Calcular el ciclo actual y el desplazamiento
+  //     const currentCycle = Math.floor(daysFromStart / busesPerCycle);
+  //     const frequencyOffset = daysFromStart % totalFrequencies;
+  //     const startIndex = (currentCycle * busesPerCycle) % totalBuses;
+  
+  //     // Determinar buses activos
+  //     const activeBuses = [];
+  //     for (let i = 0; i < busesPerCycle; i++) {
+  //       const busIndex = (startIndex + i) % totalBuses;
+  //       activeBuses.push({
+  //         bus: allBuses[busIndex],
+  //         frequencyIndex: (i + frequencyOffset) % totalFrequencies
+  //       });
+  //     }
+  
+  //     // Crear asignaciones para cada frecuencia
+  //     for (const frequency of allFrequencies) {
+  //       const assignment = activeBuses.find(ab => 
+  //         allFrequencies[ab.frequencyIndex]?.id === frequency.id
+  //       );
+  
+  //       if (assignment) {
+  //         daySchedule.assignments.push({
+  //           frequencyId: frequency.id,
+  //           frequencyName: `De ${frequency.originCity?.name || 'Origen'} a ${frequency.destinationCity?.name || 'Destino'}`,
+  //           busId: assignment.bus.id,
+  //           busName: `Bus ${assignment.bus.id}`,
+  //           departureTime: frequency.departureTime
+  //         });
+  //       }
+  //     }
+  
+  //     schedule.push(daySchedule);
+  //     currentDate.setDate(currentDate.getDate() + 1);
+  //   }
+  
+  //   return {
+  //     routeSheetId: dto.routeSheetHeaderId,
+  //     startDate: start,
+  //     endDate: end,
+  //     schedule
+  //   };
+  // }
+
+  async getRouteSheetSchedule(dto: GetRouteSheetScheduleDto) {
     if (dto.startDate > dto.endDate) {
       throw new BadRequestException('La fecha de inicio no puede ser posterior a la fecha de fin');
     }
-
+  
     // Obtener las frecuencias únicas de la hoja de ruta
     const routeSheet = await this.prisma.routeSheetHeader.findUnique({
       where: { id: dto.routeSheetHeaderId },
       include: {
         routeSheetDetails: {
+          where: { status: Status.ACTIVE },
           include: {
             frequency: {
               include: {
@@ -392,71 +525,74 @@ export class RouteSheetsService {
         },
       },
     });
-
+  
     if (!routeSheet) {
       throw new NotFoundException(`Hoja de ruta con ID ${dto.routeSheetHeaderId} no encontrada`);
     }
-
+  
     // Obtener todas las frecuencias únicas
     const allFrequencies = [
       ...new Map(routeSheet.routeSheetDetails.map(d => [d.frequency.id, d.frequency])).values()
     ].sort((a, b) => a.id - b.id);
-
+  
     if (allFrequencies.length === 0) {
       throw new Error('No hay frecuencias asignadas a esta hoja de ruta');
     }
-
-    // Calcular el número de días en el rango
+  
+    // Ajustar las fechas
     const start = new Date(dto.startDate);
-    start.setHours(0, 0, 0, 0);
     
     const end = new Date(dto.endDate);
     end.setHours(23, 59, 59, 999);
-    
-    const diffTime = end.getTime() - start.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
+  
     // Generar el horario para cada día
     const schedule = [];
+    const currentDate = new Date(start);
     
-    for (let i = 0; i < diffDays; i++) {
-      const currentDate = new Date(start);
-      currentDate.setDate(start.getDate() + i);
-      
+    while (currentDate <= end) {
+      const dayOfWeek = currentDate.toLocaleDateString('es-ES', { weekday: 'long' });
       const daySchedule = {
         date: new Date(currentDate),
-        dayOfWeek: currentDate.toLocaleDateString('es-ES', { weekday: 'long' }),
+        dayOfWeek: dayOfWeek,
         assignments: []
       };
-
-      // Para cada frecuencia, determinar qué bus la cubre este día
-      for (const frequency of allFrequencies) {
-        try {
-          const getFrequenciesDto = {
-            routeSheetHeaderId: dto.routeSheetHeaderId,
-            frequencyId: frequency.id,
-            targetDate: currentDate.toISOString(),
-          };
-          const assignment = await this.getBusForFrequencyOnDate(getFrequenciesDto);
-
-          daySchedule.assignments.push({
-            frequencyId: frequency.id,
-            frequencyName: `De ${frequency.originCity?.name || 'Origen'} a ${frequency.destinationCity?.name || 'Destino'}`,
-            busId: assignment.bus.id,
-            busName: `Bus ${assignment.bus.id}`,
-            departureTime: frequency.departureTime
-          });
-        } catch (error) {
-          // Si hay un error (por ejemplo, no hay bus asignado), lo omitimos
-          console.warn(`Error al obtener asignación para frecuencia ${frequency.id} en ${currentDate}:`, error.message);
-        }
-      }
-
+  
+      // Para cada frecuencia, obtener el bus asignado usando la función existente
+      const assignments = await Promise.all(
+        allFrequencies.map(async (frequency) => {
+          try {
+            const result = await this.getBusForFrequencyOnDate({
+              routeSheetHeaderId: dto.routeSheetHeaderId,
+              frequencyId: frequency.id,
+              targetDate: currentDate.toISOString()
+            });
+            
+            return {
+              frequencyId: frequency.id,
+              frequencyName: `De ${frequency.originCity?.name || 'Origen'} a ${frequency.destinationCity?.name || 'Destino'}`,
+              busId: result.bus.id,
+              busName: `Bus ${result.bus.id}`,
+              departureTime: frequency.departureTime
+            };
+          } catch (error) {
+            // Si hay un error (ej. no hay bus asignado), devolvemos null
+            return null;
+          }
+        })
+      );
+  
+      // Filtrar asignaciones nulas y agregar al horario del día
+      daySchedule.assignments = assignments.filter(Boolean);
       schedule.push(daySchedule);
+      
+      // Pasar al siguiente día
+      currentDate.setDate(currentDate.getDate() + 1);
     }
-
+  
     return {
       routeSheetId: dto.routeSheetHeaderId,
+      startDate: start,
+      endDate: end,
       schedule
     };
   }
