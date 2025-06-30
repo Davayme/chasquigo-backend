@@ -41,7 +41,7 @@ export class CreateCooperativeDto {
   @ApiProperty({ example: 'https://x.com/shachimu' })
   @IsString()
   @IsNotEmpty()
-  x: string;
+  X: string;
 
   @ApiProperty({ example: 'https://chasquigo.com' })
   @IsString()
