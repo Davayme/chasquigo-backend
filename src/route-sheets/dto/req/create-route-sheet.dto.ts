@@ -12,11 +12,6 @@ export class CreateRouteSheetDto {
   @IsNotEmpty()
   startDate: string;
 
-  @ApiProperty({ description: 'Fecha de fin de la hoja de ruta', type: String, format: 'date-time', example: '2025-06-25' })
-  @IsString()
-  @IsNotEmpty()
-  endDate: string;
-
   @ApiProperty({ 
     description: 'IDs de las frecuencias que se incluirán en la hoja de ruta', 
     type: [Number],
@@ -30,19 +25,11 @@ export class CreateRouteSheetDto {
   @ApiProperty({ 
     description: 'IDs de los buses que se asignarán a la hoja de ruta',
     type: [Number],
-    example: [101, 102, 103]
+    example: [1, 2, 3]
   })
   @IsArray()
   @IsNumber({}, { each: true })
   @IsNotEmpty()
   busIds: number[];
 
-  @ApiProperty({ 
-    description: 'Estado de la hoja de ruta', 
-    example: 'Activo, Pendiente, Completado, Cancelado',
-    required: false
-  })
-  @IsString()
-  @IsOptional()
-  status?: string;
 }
